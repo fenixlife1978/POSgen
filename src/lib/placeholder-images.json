@@ -1,3 +1,58 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "user_avatar",
+      "description": "User avatar",
+      "imageUrl": "https://picsum.photos/seed/avatar/40/40",
+      "imageHint": "user avatar"
+    },
+    {
+      "id": "cam_entrance",
+      "description": "A view of a school entrance.",
+      "imageUrl": "https://picsum.photos/seed/entrance/600/400",
+      "imageHint": "school entrance"
+    },
+    {
+      "id": "cam_hallway",
+      "description": "A view of a school hallway.",
+      "imageUrl": "https://picsum.photos/seed/hallway/600/400",
+      "imageHint": "school hallway"
+    },
+    {
+      "id": "cam_cafeteria",
+      "description": "A view of a school cafeteria.",
+      "imageUrl": "https://picsum.photos/seed/cafeteria/600/400",
+      "imageHint": "school cafeteria"
+    },
+    {
+      "id": "cam_playground",
+      "description": "A view of a school playground.",
+      "imageUrl": "https://picsum.photos/seed/playground/600/400",
+      "imageHint": "school playground"
+    },
+    {
+      "id": "cam_library",
+      "description": "A view of a school library.",
+      "imageUrl": "https://picsum.photos/seed/library/600/400",
+      "imageHint": "school library"
+    },
+    {
+      "id": "cam_gym",
+      "description": "A view of a school gymnasium.",
+      "imageUrl": "https://picsum.photos/seed/gym/600/400",
+      "imageHint": "school gym"
+    },
+    {
+      "id": "cam_parking",
+      "description": "A view of a school parking lot.",
+      "imageUrl": "https://picsum.photos/seed/parking/600/400",
+      "imageHint": "parking lot"
+    },
+    {
+      "id": "cam_office",
+      "description": "A view of a school office.",
+      "imageUrl": "https://picsum.photos/seed/office/600/400",
+      "imageHint": "school office"
+    }
+  ]
 }
