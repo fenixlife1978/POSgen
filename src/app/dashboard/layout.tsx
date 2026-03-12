@@ -39,7 +39,7 @@ export default async function DashboardLayout({
               <SidebarMenuButton asChild>
                 <Link href="/dashboard">
                   <Home />
-                  <span>Overview</span>
+                  <span>Resumen</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

@@ -10,11 +10,11 @@ export async function OperationalSummary({ school }: { school: School }) {
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-lg">
                         <Bot className="h-5 w-5 text-muted-foreground" />
-                        <span>AI Operational Summary</span>
+                        <span>Resumen Operativo (IA)</span>
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <p className="text-sm text-muted-foreground">No cameras registered for this school to generate a summary.</p>
+                    <p className="text-sm text-muted-foreground">No hay cámaras registradas en esta escuela para generar un resumen.</p>
                 </CardContent>
             </Card>
         );
@@ -31,12 +31,12 @@ export async function OperationalSummary({ school }: { school: School }) {
         }))
     };
     
-    let summary = "Could not generate summary at this time. Please try again later.";
+    let summary = "No se pudo generar el resumen en este momento. Por favor, inténtelo de nuevo más tarde.";
     try {
         const result = await summarizeOperationalStatus(input);
         summary = result.summary;
     } catch (error) {
-        console.error("AI summary generation failed:", error);
+        console.error("La generación del resumen de IA falló:", error);
     }
     
     return (
@@ -44,7 +44,7 @@ export async function OperationalSummary({ school }: { school: School }) {
             <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
                     <Bot className="h-5 w-5 text-primary" />
-                    <span>AI Operational Summary</span>
+                    <span>Resumen Operativo (IA)</span>
                 </CardTitle>
             </CardHeader>
             <CardContent>

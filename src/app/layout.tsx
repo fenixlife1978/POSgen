@@ -4,7 +4,7 @@ import { Toaster } from '@/components/ui/toaster';
 
 export const metadata: Metadata = {
   title: 'VigiTrack Central',
-  description: 'Centralized Surveillance Dashboard',
+  description: 'Panel de Vigilancia Centralizado',
 };
 
 export default function RootLayout({

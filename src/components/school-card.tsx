@@ -38,27 +38,27 @@ export function SchoolCard({ school }: SchoolCardProps) {
                         {StatusIndicator}
                     </div>
                     <CardDescription>
-                        {total > 0 ? `${total} cameras registered` : "No cameras registered"}
+                        {total > 0 ? `${total} cámaras registradas` : "No hay cámaras registradas"}
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="flex-grow space-y-2">
                      <div className="flex flex-wrap gap-2">
                         <Badge variant="outline" className="border-green-500/50 text-green-400 bg-green-500/10">
-                           <CheckCircle2 className="mr-1 h-3 w-3" /> Online: {online}
+                           <CheckCircle2 className="mr-1 h-3 w-3" /> En línea: {online}
                         </Badge>
                         <Badge variant="outline" className="border-gray-500/50 text-gray-400 bg-gray-500/10">
-                           <PowerOff className="mr-1 h-3 w-3" /> Offline: {offline}
+                           <PowerOff className="mr-1 h-3 w-3" /> Desconectadas: {offline}
                         </Badge>
                          {error > 0 && (
                             <Badge variant="destructive">
-                                <AlertTriangle className="mr-1 h-3 w-3" /> Errors: {error}
+                                <AlertTriangle className="mr-1 h-3 w-3" /> Errores: {error}
                             </Badge>
                         )}
                     </div>
                 </CardContent>
                 <CardFooter>
                     <p className="flex items-center gap-1 text-sm text-primary group-hover:underline">
-                        View Details <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                        Ver Detalles <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                     </p>
                 </CardFooter>
             </Link>

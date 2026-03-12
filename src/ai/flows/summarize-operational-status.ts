@@ -1,10 +1,10 @@
 'use server';
 /**
- * @fileOverview A Genkit flow that generates a natural language summary of a school's surveillance operational status.
+ * @fileOverview Un flujo de Genkit que genera un resumen en lenguaje natural del estado operativo de vigilancia de una escuela.
  *
- * - summarizeOperationalStatus - A function that handles the generation of the operational status summary.
- * - SummarizeOperationalStatusInput - The input type for the summarizeOperationalStatus function.
- * - SummarizeOperationalStatusOutput - The return type for the summarizeOperationalStatus function.
+ * - summarizeOperationalStatus - Una función que maneja la generación del resumen del estado operativo.
+ * - SummarizeOperationalStatusInput - El tipo de entrada para la función summarizeOperationalStatus.
+ * - SummarizeOperationalStatusOutput - El tipo de retorno para la función summarizeOperationalStatus.
  */
 
 import { ai } from '@/ai/genkit';
@@ -12,22 +12,22 @@ import { z } from 'genkit';
 
 // Input Schema
 const CameraStatusSchema = z.object({
-  id: z.string().describe('Unique identifier for the camera.'),
-  name: z.string().describe('Human-readable name of the camera.'),
-  status: z.enum(['online', 'offline', 'error']).describe('Current operational status of the camera.'),
-  lastActivity: z.string().describe('ISO 8601 timestamp of the last detected activity or data transmission from the camera.').optional(),
-  issues: z.array(z.string()).describe('A list of specific issues or alerts associated with this camera.').optional(),
+  id: z.string().describe('Identificador único para la cámara.'),
+  name: z.string().describe('Nombre legible por humanos de la cámara.'),
+  status: z.enum(['online', 'offline', 'error']).describe('Estado operativo actual de la cámara.'),
+  lastActivity: z.string().describe('Marca de tiempo ISO 8601 de la última actividad detectada o transmisión de datos desde la cámara.').optional(),
+  issues: z.array(z.string()).describe('Una lista de problemas o alertas específicos asociados con esta cámara.').optional(),
 });
 
 const SummarizeOperationalStatusInputSchema = z.object({
-  schoolName: z.string().describe('The name of the school.'),
-  cameraStatuses: z.array(CameraStatusSchema).describe('An array of status objects for each camera in the school.'),
+  schoolName: z.string().describe('El nombre de la escuela.'),
+  cameraStatuses: z.array(CameraStatusSchema).describe('Un arreglo de objetos de estado para cada cámara en la escuela.'),
 });
 export type SummarizeOperationalStatusInput = z.infer<typeof SummarizeOperationalStatusInputSchema>;
 
 // Output Schema
 const SummarizeOperationalStatusOutputSchema = z.object({
-  summary: z.string().describe('A concise natural language summary of the school\'s overall surveillance operational status.'),
+  summary: z.string().describe("Un resumen conciso en lenguaje natural del estado operativo general de la vigilancia de la escuela."),
 });
 export type SummarizeOperationalStatusOutput = z.infer<typeof SummarizeOperationalStatusOutputSchema>;
 
@@ -41,20 +41,20 @@ const summarizeOperationalStatusPrompt = ai.definePrompt({
   name: 'summarizeOperationalStatusPrompt',
   input: { schema: SummarizeOperationalStatusInputSchema },
   output: { schema: SummarizeOperationalStatusOutputSchema },
-  prompt: `You are an AI assistant tasked with providing concise, natural language summaries of a school's surveillance operational status.
-Analyze the provided camera status data and generate a summary that highlights key issues, overall system health, and any cameras requiring attention.
-Focus on readability and actionable insights.
+  prompt: `Eres un asistente de IA encargado de proporcionar resúmenes concisos en lenguaje natural del estado operativo de la vigilancia de una escuela.
+Analiza los datos de estado de las cámaras proporcionados y genera un resumen que destaque los problemas clave, el estado general del sistema y cualquier cámara que requiera atención.
+Concéntrate en la legibilidad y en la información procesable.
 
-School Name: {{{schoolName}}}
+Nombre de la Escuela: {{{schoolName}}}
 
-Camera Statuses:
+Estados de las Cámaras:
 {{#each cameraStatuses}}
-- Camera ID: {{{id}}}, Name: {{{name}}}, Status: {{{status}}}
-  {{#if lastActivity}}Last Activity: {{{lastActivity}}}{{/if}}
-  {{#if issues}} Issues: {{#each issues}} "{{{this}}}"{{/each}}{{/if}}
+- ID de Cámara: {{{id}}}, Nombre: {{{name}}}, Estado: {{{status}}}
+  {{#if lastActivity}}Última Actividad: {{{lastActivity}}}{{/if}}
+  {{#if issues}} Problemas: {{#each issues}} "{{{this}}}"{{/each}}{{/if}}
 {{/each}}
 
-Based on the above information, provide a concise summary of the surveillance operational status for {{{schoolName}}}.`,
+Basado en la información anterior, proporciona un resumen conciso del estado operativo de vigilancia para {{{schoolName}}}.`,
 });
 
 // Flow definition

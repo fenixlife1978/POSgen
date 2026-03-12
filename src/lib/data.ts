@@ -21,9 +21,9 @@ const cameraImageIds = [
 ];
 
 const cameraNames = [
-  "Main Entrance", "East Hallway", "Cafeteria", "Playground Area",
-  "Library", "Gymnasium", "Staff Parking", "Admin Office", "West Hallway",
-  "Science Lab", "Art Room", "Bus Loading Zone"
+  "Entrada Principal", "Pasillo Este", "Cafetería", "Área de Juegos",
+  "Biblioteca", "Gimnasio", "Estacionamiento de Personal", "Oficina Administrativa", "Pasillo Oeste",
+  "Laboratorio de Ciencias", "Sala de Arte", "Zona de Carga de Autobuses"
 ];
 
 const cameraStatuses: Camera['status'][] = ['online', 'online', 'online', 'online', 'online', 'offline', 'error', 'online'];
@@ -39,7 +39,7 @@ function createCameras(count: number): Camera[] {
       status,
       imageId: cameraImageIds[i % cameraImageIds.length],
       lastActivity: status !== 'offline' ? new Date(Date.now() - Math.random() * 1000 * 3600).toISOString() : undefined,
-      issues: status === 'error' ? ['Low bitrate', 'Intermittent connection'] : [],
+      issues: status === 'error' ? ['Baja tasa de bits', 'Conexión intermitente'] : [],
     });
   }
   return cameras;

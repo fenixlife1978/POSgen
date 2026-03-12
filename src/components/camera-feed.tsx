@@ -14,6 +14,12 @@ export function CameraFeed({ camera }: { camera: Camera }) {
         error: "bg-red-500"
     };
 
+    const statusText = {
+        online: "En línea",
+        offline: "Desconectada",
+        error: "Error"
+    };
+
     return (
         <Card className="overflow-hidden group transition-all duration-300 hover:shadow-lg hover:border-accent">
             <CardContent className="p-0">
@@ -46,7 +52,7 @@ export function CameraFeed({ camera }: { camera: Camera }) {
                 <p className="font-medium text-sm truncate pr-2">{camera.name}</p>
                 <div className="flex items-center gap-2 shrink-0">
                     <div className={cn("h-2 w-2 rounded-full", statusColor[camera.status])} />
-                    <span className="text-xs capitalize text-muted-foreground">{camera.status}</span>
+                    <span className="text-xs capitalize text-muted-foreground">{statusText[camera.status]}</span>
                 </div>
             </CardFooter>
         </Card>
