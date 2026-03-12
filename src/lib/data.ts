@@ -46,13 +46,13 @@ function createCameras(count: number): Camera[] {
 }
 
 const schools: School[] = [
-  { id: 'northwood', name: 'Northwood High', cameras: createCameras(8) },
-  { id: 'oakdale', name: 'Oakdale Elementary', cameras: createCameras(6) },
-  { id: 'riverbend', name: 'Riverbend Middle', cameras: createCameras(10) },
-  { id: 'summit', name: 'Summit Academy', cameras: createCameras(5) },
-  { id: 'creekside', name: 'Creekside Junior High', cameras: createCameras(12) },
-  { id: 'maple-grove', name: 'Maple Grove Institute', cameras: createCameras(7) },
-  { id: 'pine-ridge', name: 'Pine Ridge School', cameras: createCameras(9) },
+  { id: 'northwood', name: 'Secundaria Northwood', cameras: createCameras(8) },
+  { id: 'oakdale', name: 'Primaria Oakdale', cameras: createCameras(6) },
+  { id: 'riverbend', name: 'Intermedia Riverbend', cameras: createCameras(10) },
+  { id: 'summit', name: 'Academia Summit', cameras: createCameras(5) },
+  { id: 'creekside', name: 'Secundaria Creekside', cameras: createCameras(12) },
+  { id: 'maple-grove', name: 'Instituto Maple Grove', cameras: createCameras(7) },
+  { id: 'pine-ridge', name: 'Escuela Pine Ridge', cameras: createCameras(9) },
 ];
 
 // Simulate async API calls
