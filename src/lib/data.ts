@@ -1,4 +1,3 @@
-import 'server-only';
 import { Campaign, Lead, MarketingAnalytics, Worker, ConversionAudit } from '@/types/marketing';
 
 export const getCampaigns = async (): Promise<Campaign[]> => {
