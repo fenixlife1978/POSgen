@@ -58,3 +58,23 @@ export interface ConversionAudit {
   rejected: number;
   rate: number;
 }
+
+export interface PayrollSummary {
+  id: string;
+  workerId: string;
+  workerName: string;
+  leadsCount: number;
+  amount: number;
+  agencyName: string;
+  status: 'pending' | 'paid';
+  period: string;
+}
+
+export interface PaymentDetails {
+  workerId: string;
+  amount: number;
+  method: 'binance' | 'pago_movil' | 'paypal' | 'zelle' | 'other';
+  reference: string;
+  receiptUrl?: string;
+  date: string;
+}

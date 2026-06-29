@@ -1,4 +1,4 @@
-import { Campaign, Lead, MarketingAnalytics, Worker, ConversionAudit } from '@/types/marketing';
+import { Campaign, Lead, MarketingAnalytics, Worker, ConversionAudit, PayrollSummary } from '@/types/marketing';
 
 export const getCampaigns = async (): Promise<Campaign[]> => {
   return [
@@ -104,5 +104,13 @@ export const getConversionAudit = async (): Promise<ConversionAudit[]> => {
     { date: '2024-05-03', approved: 52, rejected: 3, rate: 94 },
     { date: '2024-05-04', approved: 41, rejected: 15, rate: 73 },
     { date: '2024-05-05', approved: 48, rejected: 8, rate: 85 }
+  ];
+};
+
+export const getPayrollSummary = async (): Promise<PayrollSummary[]> => {
+  return [
+    { id: 'p1', workerId: 'w1', workerName: 'Carlos Mendoza', leadsCount: 60, amount: 150, agencyName: 'Cpamerchant', status: 'pending', period: 'Mayo - Quincena 1' },
+    { id: 'p2', workerId: 'w2', workerName: 'Elena Rodríguez', leadsCount: 45, amount: 112.5, agencyName: 'Cpamerchant', status: 'pending', period: 'Mayo - Quincena 1' },
+    { id: 'p3', workerId: 'w1', workerName: 'Carlos Mendoza', leadsCount: 30, amount: 75, agencyName: 'Alpha Leads', status: 'paid', period: 'Abril - Quincena 2' },
   ];
 };

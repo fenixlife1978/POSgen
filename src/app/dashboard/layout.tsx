@@ -6,7 +6,8 @@ import {
   BarChart3, 
   Settings,
   Sparkles,
-  Briefcase
+  Briefcase,
+  Wallet
 } from "lucide-react";
 
 import { UserNav } from "@/components/user-nav";
@@ -61,6 +62,14 @@ export default function DashboardLayout({
                     <Link href="/dashboard/team">
                       <Briefcase className="size-5" />
                       <span className="font-medium">Equipo</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild tooltip="Nómina" className="rounded-2xl h-12 px-4 transition-all hover:bg-primary/10">
+                    <Link href="/dashboard/payroll">
+                      <Wallet className="size-5" />
+                      <span className="font-medium">Nómina</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
