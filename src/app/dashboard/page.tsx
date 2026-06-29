@@ -1,4 +1,3 @@
-
 import { getCampaigns, getLeads, getAnalytics } from '@/lib/data';
 import { 
   Users, 
@@ -12,28 +11,14 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { 
-  ChartContainer, 
-  ChartTooltip, 
-  ChartTooltipContent 
-} from '@/components/ui/chart';
-import { 
-  Bar, 
-  BarChart, 
-  ResponsiveContainer, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid,
-  Tooltip,
-  Legend
-} from 'recharts';
+import { AgencyRevenueChart } from '@/components/dashboard/agency-revenue-chart';
 
 export default async function DashboardPage() {
     const campaigns = await getCampaigns();
     const leads = await getLeads();
     const analytics = await getAnalytics();
 
-    // Mock de datos para el gráfico de agencias (últimos 7 días)
+    // Datos para el gráfico de agencias
     const agencyData = [
       { day: 'Lun', agenciaA: 1200, agenciaB: 900 },
       { day: 'Mar', agenciaA: 1900, agenciaB: 1400 },
@@ -117,38 +102,7 @@ export default async function DashboardPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="p-8">
-                  <div className="h-[400px] w-full mt-4">
-                    <ChartContainer config={chartConfig} className="h-full w-full">
-                      <BarChart data={agencyData}>
-                        <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.1)" />
-                        <XAxis 
-                          dataKey="day" 
-                          axisLine={false} 
-                          tickLine={false} 
-                          tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12, fontWeight: 600 }}
-                          dy={10}
-                        />
-                        <YAxis 
-                          axisLine={false} 
-                          tickLine={false} 
-                          tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12, fontWeight: 600 }}
-                        />
-                        <Tooltip content={<ChartTooltipContent />} cursor={{ fill: 'hsl(var(--muted) / 0.5)', radius: 8 }} />
-                        <Bar 
-                          dataKey="agenciaA" 
-                          fill="var(--color-agenciaA)" 
-                          radius={[6, 6, 0, 0]} 
-                          barSize={30}
-                        />
-                        <Bar 
-                          dataKey="agenciaB" 
-                          fill="var(--color-agenciaB)" 
-                          radius={[6, 6, 0, 0]} 
-                          barSize={30}
-                        />
-                      </BarChart>
-                    </ChartContainer>
-                  </div>
+                  <AgencyRevenueChart data={agencyData} config={chartConfig} />
                 </CardContent>
               </Card>
 
