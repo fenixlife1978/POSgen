@@ -1,122 +1,172 @@
-import { getCampaigns, getLeads, getAnalytics } from '@/lib/data'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+
+import { getCampaigns, getLeads, getAnalytics } from '@/lib/data';
 import { 
-  Target, 
   Users, 
-  TrendingUp, 
+  CheckCircle2, 
+  Wallet, 
+  Zap,
   ArrowUpRight,
   ArrowDownRight,
-  MousePointer2,
-  Calendar,
-  BarChart3
-} from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+  TrendingUp,
+  Activity
+} from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { 
+  ChartContainer, 
+  ChartTooltip, 
+  ChartTooltipContent 
+} from '@/components/ui/chart';
+import { 
+  Bar, 
+  BarChart, 
+  ResponsiveContainer, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid,
+  Tooltip,
+  Legend
+} from 'recharts';
 
 export default async function DashboardPage() {
     const campaigns = await getCampaigns();
     const leads = await getLeads();
     const analytics = await getAnalytics();
 
-    const totalBudget = campaigns.reduce((acc, c) => acc + c.budget, 0);
-    const totalSpent = campaigns.reduce((acc, c) => acc + c.spent, 0);
-    const totalConversions = campaigns.reduce((acc, c) => acc + c.metrics.conversions, 0);
+    // Mock de datos para el gráfico de agencias (últimos 7 días)
+    const agencyData = [
+      { day: 'Lun', agenciaA: 1200, agenciaB: 900 },
+      { day: 'Mar', agenciaA: 1900, agenciaB: 1400 },
+      { day: 'Mié', agenciaA: 1500, agenciaB: 2100 },
+      { day: 'Jue', agenciaA: 2200, agenciaB: 1700 },
+      { day: 'Vie', agenciaA: 2800, agenciaB: 2400 },
+      { day: 'Sáb', agenciaA: 1600, agenciaB: 1100 },
+      { day: 'Dom', agenciaA: 1300, agenciaB: 800 },
+    ];
+
+    const chartConfig = {
+      agenciaA: {
+        label: "Agencia Alpha",
+        color: "hsl(var(--primary))",
+      },
+      agenciaB: {
+        label: "Agencia Beta",
+        color: "hsl(var(--primary) / 0.5)",
+      },
+    };
 
     return (
-        <div className="space-y-10">
+        <div className="space-y-10 animate-in fade-in duration-700">
             <div className="flex flex-col gap-2">
-                <h2 className="text-4xl font-extrabold tracking-tight text-foreground/90">Panel de Control</h2>
+                <h2 className="text-4xl font-black tracking-tight text-foreground/90">Panel de Control</h2>
                 <p className="text-lg text-muted-foreground/80 font-medium">
-                    Bienvenido de nuevo. Aquí tienes el pulso de tu estrategia de marketing hoy.
+                    Resumen ejecutivo del rendimiento y estado de operaciones.
                 </p>
             </div>
 
+            {/* Tarjetas de KPIs */}
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
                 <StatCard 
-                  title="Presupuesto Total" 
-                  value={`$${totalBudget.toLocaleString()}`} 
-                  icon={<Target className="size-5" />}
-                  trend="+12%"
+                  title="Leads del Día" 
+                  value="48" 
+                  icon={<Users className="size-5" />}
+                  trend="+12 hoy"
                   trendType="up"
                   color="bg-blue-500"
                 />
                 <StatCard 
-                  title="Gasto Actual" 
-                  value={`$${totalSpent.toLocaleString()}`} 
-                  icon={<TrendingUp className="size-5" />}
-                  trend="+5%"
+                  title="Aprobados (Quincena)" 
+                  value="312" 
+                  icon={<CheckCircle2 className="size-5" />}
+                  trend="+18%"
+                  trendType="up"
+                  color="bg-emerald-500"
+                />
+                <StatCard 
+                  title="Proyección Nómina" 
+                  value="$12,450" 
+                  icon={<Wallet className="size-5" />}
+                  trend="En presupuesto"
                   trendType="up"
                   color="bg-indigo-500"
                 />
                 <StatCard 
-                  title="Conversiones" 
-                  value={totalConversions.toString()} 
-                  icon={<MousePointer2 className="size-5" />}
-                  trend="+18%"
+                  title="Estado de APIs" 
+                  value="Activo" 
+                  icon={<Zap className="size-5" />}
+                  trend="4/4 Conectadas"
                   trendType="up"
-                  color="bg-purple-500"
-                />
-                <StatCard 
-                  title="Total Leads" 
-                  value={leads.length.toString()} 
-                  icon={<Users className="size-5" />}
-                  trend="-2%"
-                  trendType="down"
-                  color="bg-emerald-500"
+                  color="bg-amber-500"
+                  isStatus
                 />
             </div>
 
-            <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-7">
+            <div className="grid gap-8 lg:grid-cols-7">
+              {/* Gráfico de Rendimiento */}
               <Card className="lg:col-span-4 rounded-[2.5rem] border-none shadow-2xl shadow-black/5 bg-card/50 backdrop-blur-sm overflow-hidden">
                 <CardHeader className="p-8 pb-0">
                   <div className="flex items-center justify-between">
                     <div>
-                      <CardTitle className="text-2xl">Rendimiento Mensual</CardTitle>
-                      <CardDescription className="text-base">Comparativa de ingresos vs inversión.</CardDescription>
+                      <CardTitle className="text-2xl flex items-center gap-2">
+                        <TrendingUp className="size-6 text-primary" />
+                        Ingresos por Agencia
+                      </CardTitle>
+                      <CardDescription className="text-base">Rendimiento comparativo de los últimos 7 días.</CardDescription>
                     </div>
-                    <Badge variant="secondary" className="rounded-full px-4 py-1">Últimos 6 meses</Badge>
+                    <Badge variant="secondary" className="rounded-full px-4 py-1 font-bold">Tiempo Real</Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="p-8">
-                  <div className="h-[350px] w-full flex items-center justify-center bg-muted/20 rounded-[2rem] border-2 border-dashed border-muted-foreground/10 group hover:border-primary/20 transition-colors">
-                    <div className="text-center space-y-2">
-                       <BarChart3 className="size-12 mx-auto text-muted-foreground/20 group-hover:text-primary/30 transition-colors" />
-                       <p className="text-sm font-medium text-muted-foreground/40 italic">Gráfico Interactivo de Rendimiento</p>
-                    </div>
+                  <div className="h-[400px] w-full mt-4">
+                    <ChartContainer config={chartConfig} className="h-full w-full">
+                      <BarChart data={agencyData}>
+                        <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--muted-foreground) / 0.1)" />
+                        <XAxis 
+                          dataKey="day" 
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12, fontWeight: 600 }}
+                          dy={10}
+                        />
+                        <YAxis 
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12, fontWeight: 600 }}
+                        />
+                        <Tooltip content={<ChartTooltipContent />} cursor={{ fill: 'hsl(var(--muted) / 0.5)', radius: 8 }} />
+                        <Bar 
+                          dataKey="agenciaA" 
+                          fill="var(--color-agenciaA)" 
+                          radius={[6, 6, 0, 0]} 
+                          barSize={30}
+                        />
+                        <Bar 
+                          dataKey="agenciaB" 
+                          fill="var(--color-agenciaB)" 
+                          radius={[6, 6, 0, 0]} 
+                          barSize={30}
+                        />
+                      </BarChart>
+                    </ChartContainer>
                   </div>
                 </CardContent>
               </Card>
 
+              {/* Conexiones Recientes o Actividad */}
               <Card className="lg:col-span-3 rounded-[2.5rem] border-none shadow-2xl shadow-black/5 bg-card/50 backdrop-blur-sm">
                 <CardHeader className="p-8 pb-4">
-                  <CardTitle className="text-2xl">Campañas Activas</CardTitle>
-                  <CardDescription className="text-base">Monitoreo de ejecución en tiempo real.</CardDescription>
+                  <CardTitle className="text-2xl flex items-center gap-2">
+                    <Activity className="size-6 text-primary" />
+                    Estado de Conexiones
+                  </CardTitle>
+                  <CardDescription className="text-base">Monitoreo de latencia de servicios.</CardDescription>
                 </CardHeader>
                 <CardContent className="p-8 pt-0">
                   <div className="space-y-5">
-                    {campaigns.slice(0, 3).map(campaign => (
-                      <div key={campaign.id} className="group flex items-center gap-5 p-4 rounded-[1.5rem] bg-background/40 hover:bg-background/80 transition-all border border-transparent hover:border-primary/5 hover:soft-shadow">
-                        <div className={`size-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${
-                          campaign.status === 'active' ? 'bg-primary' : 'bg-muted-foreground/30'
-                        }`}>
-                          <Target className="size-6" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-foreground/90 truncate">{campaign.name}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Badge variant={campaign.status === 'active' ? 'default' : 'secondary'} className="text-[10px] h-5 rounded-full px-2">
-                              {campaign.status}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground flex items-center gap-1 font-medium">
-                              <Calendar className="size-3" /> {new Date(campaign.startDate).toLocaleDateString()}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-black text-primary">${campaign.spent.toLocaleString()}</p>
-                          <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-tighter">Gasto Actual</p>
-                        </div>
-                      </div>
-                    ))}
+                    <ServiceStatusRow name="Evolution API" status="active" latency="45ms" />
+                    <ServiceStatusRow name="CPA Merchant" status="active" latency="120ms" />
+                    <ServiceStatusRow name="MongoDB Atlas" status="active" latency="12ms" />
+                    <ServiceStatusRow name="Turso DB" status="active" latency="28ms" />
                   </div>
                 </CardContent>
               </Card>
@@ -125,27 +175,35 @@ export default async function DashboardPage() {
     )
 }
 
-function StatCard({ title, value, icon, trend, trendType, color }: { 
+function StatCard({ title, value, icon, trend, trendType, color, isStatus }: { 
   title: string, 
   value: string, 
   icon: React.ReactNode, 
   trend: string, 
   trendType: 'up' | 'down',
-  color: string
+  color: string,
+  isStatus?: boolean
 }) {
   return (
-    <Card className="rounded-[2rem] border-none shadow-xl shadow-black/5 bg-card/60 backdrop-blur-sm group hover:scale-[1.02] transition-transform duration-300">
+    <Card className="rounded-[2rem] border-none shadow-xl shadow-black/5 bg-card/60 backdrop-blur-sm group hover:scale-[1.02] transition-all duration-300">
       <CardContent className="p-7">
         <div className="flex flex-row items-center justify-between mb-4">
-          <div className={`p-3 rounded-2xl ${color} text-white shadow-lg group-hover:rotate-6 transition-transform`}>
+          <div className={`p-3 rounded-2xl ${color} text-white shadow-lg group-hover:rotate-6 transition-transform duration-300`}>
             {icon}
           </div>
-          <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${
-            trendType === 'up' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-          }`}>
-            {trendType === 'up' ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
-            {trend}
-          </div>
+          {isStatus ? (
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold animate-pulse">
+              <div className="size-2 rounded-full bg-emerald-500" />
+              ONLINE
+            </div>
+          ) : (
+            <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${
+              trendType === 'up' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+            }`}>
+              {trendType === 'up' ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
+              {trend}
+            </div>
+          )}
         </div>
         <div className="space-y-1">
           <p className="text-sm font-bold text-muted-foreground/60 uppercase tracking-widest">{title}</p>
@@ -153,5 +211,19 @@ function StatCard({ title, value, icon, trend, trendType, color }: {
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+function ServiceStatusRow({ name, status, latency }: { name: string, status: 'active' | 'inactive', latency: string }) {
+  return (
+    <div className="group flex items-center justify-between p-4 rounded-[1.5rem] bg-background/40 hover:bg-background/80 transition-all border border-transparent hover:border-primary/5">
+      <div className="flex items-center gap-4">
+        <div className={`size-3 rounded-full ${status === 'active' ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-destructive'}`} />
+        <span className="font-bold text-foreground/80">{name}</span>
+      </div>
+      <Badge variant="outline" className="rounded-full px-3 py-0.5 font-mono text-[10px] text-muted-foreground">
+        {latency}
+      </Badge>
+    </div>
   )
 }
