@@ -7,7 +7,8 @@ import {
   Settings,
   Sparkles,
   Briefcase,
-  Wallet
+  Wallet,
+  FileText
 } from "lucide-react";
 
 import { UserNav } from "@/components/user-nav";
@@ -62,6 +63,14 @@ export default function DashboardLayout({
                     <Link href="/dashboard/team">
                       <Briefcase className="size-5" />
                       <span className="font-medium">Equipo</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild tooltip="Reporte Ganancias" className="rounded-2xl h-12 px-4 transition-all hover:bg-primary/10">
+                    <Link href="/dashboard/reports-workers">
+                      <FileText className="size-5" />
+                      <span className="font-medium">Reporte Ganancias</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
