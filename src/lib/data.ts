@@ -1,7 +1,6 @@
 import 'server-only';
-import { Campaign, Lead, MarketingAnalytics } from '@/types/marketing';
+import { Campaign, Lead, MarketingAnalytics, Worker, ConversionAudit } from '@/types/marketing';
 
-// Mock data para el desarrollo inicial
 export const getCampaigns = async (): Promise<Campaign[]> => {
   return [
     {
@@ -32,21 +31,6 @@ export const getCampaigns = async (): Promise<Campaign[]> => {
         impressions: 15000,
         clicks: 1200,
         conversions: 85
-      }
-    },
-    {
-      id: '3',
-      name: 'Black Friday Prep',
-      description: 'Preparación para ventas masivas de noviembre.',
-      budget: 25000,
-      spent: 0,
-      startDate: '2024-11-01',
-      status: 'draft',
-      channel: 'display',
-      metrics: {
-        impressions: 0,
-        clicks: 0,
-        conversions: 0
       }
     }
   ];
@@ -79,9 +63,47 @@ export const getAnalytics = async (): Promise<MarketingAnalytics[]> => {
   return [
     { date: '2024-01', revenue: 4000, spend: 2400, leads: 400, roi: 1.66 },
     { date: '2024-02', revenue: 3000, spend: 1398, leads: 300, roi: 2.14 },
-    { date: '2024-03', revenue: 2000, spend: 9800, leads: 200, roi: 0.20 },
-    { date: '2024-04', revenue: 2780, spend: 3908, leads: 278, roi: 0.71 },
-    { date: '2024-05', revenue: 1890, spend: 4800, leads: 189, roi: 0.39 },
-    { date: '2024-06', revenue: 2390, spend: 3800, leads: 239, roi: 0.62 },
+    { date: '2024-03', revenue: 2000, spend: 9800, leads: 200, roi: 0.20 }
+  ];
+};
+
+export const getWorkers = async (): Promise<Worker[]> => {
+  return [
+    {
+      id: 'w1',
+      name: 'Carlos Mendoza',
+      whatsapp: '+34 600 000 001',
+      status: 'active',
+      subIds: [
+        { id: 's1', code: 'CM-01', trackingLink: 'https://track.link/offer1?subid=CM-01', offerName: 'Oferta CPA Premium' },
+        { id: 's2', code: 'CM-FB', trackingLink: 'https://track.link/offer2?subid=CM-FB', offerName: 'Oferta Facebook Invierno' }
+      ]
+    },
+    {
+      id: 'w2',
+      name: 'Elena Rodríguez',
+      whatsapp: '+34 600 000 002',
+      status: 'active',
+      subIds: [
+        { id: 's3', code: 'ER-01', trackingLink: 'https://track.link/offer1?subid=ER-01', offerName: 'Oferta CPA Premium' }
+      ]
+    },
+    {
+      id: 'w3',
+      name: 'Roberto Sánchez',
+      whatsapp: '+34 600 000 003',
+      status: 'inactive',
+      subIds: []
+    }
+  ];
+};
+
+export const getConversionAudit = async (): Promise<ConversionAudit[]> => {
+  return [
+    { date: '2024-05-01', approved: 45, rejected: 5, rate: 90 },
+    { date: '2024-05-02', approved: 38, rejected: 12, rate: 76 },
+    { date: '2024-05-03', approved: 52, rejected: 3, rate: 94 },
+    { date: '2024-05-04', approved: 41, rejected: 15, rate: 73 },
+    { date: '2024-05-05', approved: 48, rejected: 8, rate: 85 }
   ];
 };

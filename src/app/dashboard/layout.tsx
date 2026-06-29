@@ -5,7 +5,8 @@ import {
   Users, 
   BarChart3, 
   Settings,
-  Sparkles
+  Sparkles,
+  Briefcase
 } from "lucide-react";
 
 import { UserNav } from "@/components/user-nav";
@@ -56,6 +57,14 @@ export default function DashboardLayout({
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
+                  <SidebarMenuButton asChild tooltip="Equipo" className="rounded-2xl h-12 px-4 transition-all hover:bg-primary/10">
+                    <Link href="/dashboard/team">
+                      <Briefcase className="size-5" />
+                      <span className="font-medium">Equipo</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
                   <SidebarMenuButton asChild tooltip="Campañas" className="rounded-2xl h-12 px-4 transition-all hover:bg-primary/10">
                     <Link href="/dashboard/campaigns">
                       <Megaphone className="size-5" />
@@ -72,10 +81,10 @@ export default function DashboardLayout({
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild tooltip="Analítica" className="rounded-2xl h-12 px-4 transition-all hover:bg-primary/10">
+                  <SidebarMenuButton asChild tooltip="Auditoría" className="rounded-2xl h-12 px-4 transition-all hover:bg-primary/10">
                     <Link href="/dashboard/analytics">
                       <BarChart3 className="size-5" />
-                      <span className="font-medium">Analítica</span>
+                      <span className="font-medium">Auditoría</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -107,9 +116,9 @@ export default function DashboardLayout({
             <SidebarTrigger className="hover:bg-primary/10 rounded-xl" />
             <div className="h-6 w-px bg-border/60" />
             <nav className="flex items-center gap-2 text-sm font-medium">
-              <span className="text-muted-foreground">Admin</span>
+              <span className="text-muted-foreground">Administración</span>
               <span className="text-muted-foreground">/</span>
-              <span className="text-foreground">Dashboard</span>
+              <span className="text-foreground font-bold">Panel de Control</span>
             </nav>
           </div>
           <div className="flex items-center gap-6">

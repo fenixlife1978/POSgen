@@ -35,3 +35,26 @@ export interface MarketingAnalytics {
   leads: number;
   roi: number;
 }
+
+export interface Worker {
+  id: string;
+  name: string;
+  avatar?: string;
+  whatsapp: string;
+  status: 'active' | 'inactive';
+  subIds: SubId[];
+}
+
+export interface SubId {
+  id: string;
+  code: string;
+  trackingLink: string;
+  offerName: string;
+}
+
+export interface ConversionAudit {
+  date: string;
+  approved: number;
+  rejected: number;
+  rate: number;
+}
