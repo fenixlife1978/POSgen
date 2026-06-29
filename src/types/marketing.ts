@@ -2,12 +2,15 @@ export type CampaignStatus = 'active' | 'paused' | 'completed' | 'draft';
 
 export interface Campaign {
   id: string;
+  externalOfferId: string;
   name: string;
   description: string;
+  agencyName: string;
+  payoutPerLead: number;
+  trackingUrl: string;
   budget: number;
   spent: number;
   startDate: string;
-  endDate?: string;
   status: CampaignStatus;
   channel: 'social' | 'email' | 'search' | 'display' | 'other';
   metrics: {
@@ -17,14 +20,21 @@ export interface Campaign {
   };
 }
 
+export type LeadStatus = 'approved' | 'pending' | 'rejected' | 'new' | 'contacted' | 'qualified' | 'converted' | 'lost';
+
 export interface Lead {
   id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
+  conversionId: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
   source: string;
-  campaignId?: string;
-  status: 'new' | 'contacted' | 'qualified' | 'converted' | 'lost';
+  subId: string;
+  workerId?: string;
+  campaignId: string;
+  campaignName: string;
+  amount: number;
+  status: LeadStatus;
   createdAt: string;
 }
 
