@@ -1,3 +1,16 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "hero_bg",
+      "description": "Abstract marketing background",
+      "imageUrl": "https://picsum.photos/seed/marketing1/1200/800",
+      "imageHint": "digital marketing"
+    },
+    {
+      "id": "campaign_thumb",
+      "description": "Social media campaign preview",
+      "imageUrl": "https://picsum.photos/seed/campaign/400/300",
+      "imageHint": "social media"
+    }
+  ]
 }
