@@ -1,16 +1,22 @@
 {
   "placeholderImages": [
     {
-      "id": "hero_bg",
-      "description": "Abstract marketing background",
-      "imageUrl": "https://picsum.photos/seed/marketing1/1200/800",
-      "imageHint": "digital marketing"
+      "id": "user_avatar",
+      "description": "User profile picture",
+      "imageUrl": "https://picsum.photos/seed/admin/200/200",
+      "imageHint": "profile portrait"
     },
     {
-      "id": "campaign_thumb",
-      "description": "Social media campaign preview",
-      "imageUrl": "https://picsum.photos/seed/campaign/400/300",
+      "id": "campaign_social",
+      "description": "Social media marketing",
+      "imageUrl": "https://picsum.photos/seed/social/800/600",
       "imageHint": "social media"
+    },
+    {
+      "id": "analytics_chart",
+      "description": "Business growth charts",
+      "imageUrl": "https://picsum.photos/seed/growth/800/600",
+      "imageHint": "business analytics"
     }
   ]
 }
