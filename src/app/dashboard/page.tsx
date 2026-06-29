@@ -7,7 +7,8 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   MousePointer2,
-  Calendar
+  Calendar,
+  BarChart3
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 
