@@ -12,17 +12,18 @@ import { ReportsModule } from '@/components/pos/reports-module';
 import { ConfigModule } from '@/components/pos/config-module';
 import { AccountsModule } from '@/components/pos/accounts-module';
 import { Modals } from '@/components/pos/modals';
-import { Product, Client, Sale, Account, CartItem } from '@/types/pos';
+import { Product, Client, Sale, Account, CartItem, Presupuesto } from '@/types/pos';
 
 export default function POSPage() {
   const [activeModule, setActiveModule] = useState('pos');
   const [activeModal, setActiveModal] = useState<string | null>(null);
   
-  // App State (The DB)
+  // App State
   const [products, setProducts] = useState<Product[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
   const [posCart, setPosCart] = useState<CartItem[]>([]);
   const [selectedRow, setSelectedRow] = useState(-1);
   const [config, setConfig] = useState({
@@ -40,19 +41,19 @@ export default function POSPage() {
 
   // Initialization
   useEffect(() => {
-    const saved = localStorage.getItem('autoparts_pos_db_v2');
+    const saved = localStorage.getItem('autoparts_pos_db_v3');
     if (saved) {
       const data = JSON.parse(saved);
       if (data.products) setProducts(data.products);
       if (data.clients) setClients(data.clients);
       if (data.sales) setSales(data.sales);
       if (data.accounts) setAccounts(data.accounts);
+      if (data.presupuestos) setPresupuestos(data.presupuestos);
       if (data.config) setConfig(data.config);
     } else {
-      // Mock some data for demo
+      // Sample data
       setProducts([
-        { codigo: 'ACE-5W30', descripcion: 'ACEITE MOTOR 5W-30 SYNTHETIC 1GL', categoria: 'Lubricante', marca: 'Mobil', modelo: 'Universal', departamento: 'Lubricantes', precioUsd: 28.50, precioBs: 28.50 * 724, costoUsd: 18.00, margen: 36.84, iva: 16, stock: 35, stockMin: 10, unidad: 'Galón', ubicacion: 'C-1', isKit: false, stockPropio: true, activo: true, cpp: 18.00 },
-        { codigo: 'FILT-OIL', descripcion: 'FILTRO DE ACEITE UNIVERSAL', categoria: 'Repuesto', marca: 'Fram', modelo: 'Universal', departamento: 'Repuestos', precioUsd: 8.50, precioBs: 8.50 * 724, costoUsd: 4.00, margen: 52.94, iva: 16, stock: 55, stockMin: 15, unidad: 'Unidad', ubicacion: 'D-2', isKit: false, stockPropio: true, activo: true, cpp: 4.00 }
+        { codigo: 'ACE-5W30', descripcion: 'ACEITE MOTOR 5W-30 SYNTHETIC 1GL', categoria: 'Lubricante', marca: 'Mobil', modelo: 'Universal', departamento: 'Lubricantes', precioUsd: 28.50, precioBs: 28.50 * 724, costoUsd: 18.00, margen: 36.84, iva: 16, stock: 35, stockMin: 10, unidad: 'Galón', ubicacion: 'C-1', isKit: false, stockPropio: true, activo: true, cpp: 18.00 }
       ]);
       setClients([
         { tipoRif: 'V', rifNum: '00000000-0', nombre: 'Consumidor Final', telefono: '', email: '', direccion: '', tipo: 'Regular', credito: 0, saldo: 0 }
@@ -61,11 +62,10 @@ export default function POSPage() {
   }, []);
 
   useEffect(() => {
-    const data = { products, clients, sales, accounts, config };
-    localStorage.setItem('autoparts_pos_db_v2', JSON.stringify(data));
-  }, [products, clients, sales, accounts, config]);
+    const data = { products, clients, sales, accounts, presupuestos, config };
+    localStorage.setItem('autoparts_pos_db_v3', JSON.stringify(data));
+  }, [products, clients, sales, accounts, presupuestos, config]);
 
-  // Handlers
   const notify = (msg: string, type: 'success' | 'error' | 'warning' = 'success') => {
     const el = document.getElementById('notification');
     if (el) {
@@ -77,8 +77,6 @@ export default function POSPage() {
 
   const openModal = (id: string) => setActiveModal(id);
   const closeModal = () => setActiveModal(null);
-
-  const switchModule = (name: string) => setActiveModule(name);
 
   return (
     <div id="mainApp">
@@ -94,7 +92,7 @@ export default function POSPage() {
 
       <div className="nav-tabs">
         {['pos', 'dashboard', 'productos', 'clientes', 'ventas', 'inventario', 'reportes', 'cuentas', 'config'].map(m => (
-          <div key={m} className={`nav-tab ${activeModule === m ? 'active' : ''}`} onClick={() => switchModule(m)}>
+          <div key={m} className={`nav-tab ${activeModule === m ? 'active' : ''}`} onClick={() => setActiveModule(m)}>
             {m === 'pos' ? '️ POS Venta' : 
              m === 'dashboard' ? ' Dashboard' :
              m === 'productos' ? '📦 Productos' :
@@ -131,7 +129,7 @@ export default function POSPage() {
       
       <ClientsModule active={activeModule === 'clientes'} onOpenModal={openModal} clients={clients} />
       
-      <SalesModule active={activeModule === 'ventas'} sales={sales} notify={notify} showInvoice={(s) => { /* logic */ }} />
+      <SalesModule active={activeModule === 'ventas'} sales={sales} notify={notify} />
       
       <InventoryModule active={activeModule === 'inventario'} onOpenModal={openModal} products={products} />
       
@@ -159,6 +157,8 @@ export default function POSPage() {
         setSales={setSales}
         accounts={accounts}
         setAccounts={setAccounts}
+        presupuestos={presupuestos}
+        setPresupuestos={setPresupuestos}
         cart={posCart}
         setCart={setPosCart}
         config={config}

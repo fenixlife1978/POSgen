@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Product, Client, Sale, Account, CartItem } from '@/types/pos';
+import { Product, Client, Sale, Account, CartItem, Presupuesto } from '@/types/pos';
 
 interface ModalsProps {
   activeModal: string | null;
@@ -15,6 +15,8 @@ interface ModalsProps {
   setSales: React.Dispatch<React.SetStateAction<Sale[]>>;
   accounts: Account[];
   setAccounts: React.Dispatch<React.SetStateAction<Account[]>>;
+  presupuestos: Presupuesto[];
+  setPresupuestos: React.Dispatch<React.SetStateAction<Presupuesto[]>>;
   cart: CartItem[];
   setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
   config: any;
@@ -22,7 +24,12 @@ interface ModalsProps {
   selectedRow: number;
 }
 
-export function Modals({ activeModal, onClose, products, setProducts, clients, setClients, sales, setSales, accounts, setAccounts, cart, setCart, config, notify, selectedRow }: ModalsProps) {
+export function Modals({ 
+  activeModal, onClose, products, setProducts, clients, setClients, 
+  sales, setSales, accounts, setAccounts, presupuestos, setPresupuestos,
+  cart, setCart, config, notify, selectedRow 
+}: ModalsProps) {
+  
   const [productForm, setProductForm] = useState<Partial<Product>>({
     codigo: '',
     descripcion: '',
@@ -36,12 +43,15 @@ export function Modals({ activeModal, onClose, products, setProducts, clients, s
     marca: 'Universal',
     unidad: 'Unidad',
     categoria: 'Repuesto',
-    departamento: 'General'
+    departamento: 'General',
+    isKit: false,
+    stockPropio: true,
+    activo: true
   });
 
   if (!activeModal) return null;
 
-  // Markup Logic: Price = Cost / (1 - Margin/100)
+  // Markup Logic: Precio = Costo / (1 - Margen/100)
   const handleProductPriceCalc = (field: string, val: string) => {
     const num = parseFloat(val) || 0;
     let newForm = { ...productForm, [field]: num };
@@ -108,53 +118,106 @@ export function Modals({ activeModal, onClose, products, setProducts, clients, s
     onClose();
   };
 
+  const saveInventoryEntry = (e: any) => {
+    e.preventDefault();
+    const prodIdx = parseInt(e.target.entProducto.value);
+    const qty = parseInt(e.target.entCantidad.value);
+    const costo = parseFloat(e.target.entCosto.value);
+    
+    const newProducts = [...products];
+    const p = newProducts[prodIdx];
+    
+    // CPP Logic: (StockActual * CPP + NuevaCant * NuevoCosto) / NuevoStockTotal
+    const currentStock = p.stock || 0;
+    const currentCpp = p.cpp || p.costoUsd || 0;
+    const newStock = currentStock + qty;
+    const newCpp = ((currentStock * currentCpp) + (qty * costo)) / newStock;
+    
+    p.stock = newStock;
+    p.cpp = newCpp;
+    p.costoUsd = costo; // Update last cost
+    
+    setProducts(newProducts);
+    notify('✅ Entrada registrada y CPP actualizado');
+    onClose();
+  };
+
   return (
-    <>
-      <div className={`modal-overlay active`} onClick={onClose}>
-        <div className="modal-window large" onClick={(e) => e.stopPropagation()}>
-          <div className="modal-titlebar">
-            <span>{activeModal.replace('modal', '')}</span>
-            <span className="modal-close" onClick={onClose}>✕</span>
-          </div>
-          <div className="modal-body">
-            {activeModal === 'modalProducto' && (
-              <div className="space-y-4">
-                <div className="form-row">
-                  <div className="form-group"><label>Código:</label><input type="text" value={productForm.codigo} onChange={e => setProductForm({...productForm, codigo: e.target.value})} /></div>
-                  <div className="form-group"><label>Descripción:</label><input type="text" value={productForm.descripcion} onChange={e => setProductForm({...productForm, descripcion: e.target.value})} /></div>
+    <div className={`modal-overlay ${activeModal ? 'active' : ''}`} onClick={onClose}>
+      <div className="modal-window large" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-titlebar">
+          <span>{activeModal?.replace('modal', '')}</span>
+          <span className="modal-close" onClick={onClose}>✕</span>
+        </div>
+        <div className="modal-body">
+          {activeModal === 'modalProducto' && (
+            <div className="space-y-4">
+              <div className="form-row">
+                <div className="form-group"><label>Código:</label><input type="text" value={productForm.codigo} onChange={e => setProductForm({...productForm, codigo: e.target.value})} /></div>
+                <div className="form-group"><label>Descripción:</label><input type="text" value={productForm.descripcion} onChange={e => setProductForm({...productForm, descripcion: e.target.value})} /></div>
+              </div>
+              <div className="form-row">
+                <div className="form-group"><label>Costo USD:</label><input type="number" value={productForm.costoUsd} onChange={e => handleProductPriceCalc('costoUsd', e.target.value)} /></div>
+                <div className="form-group"><label>Margen (%):</label><input type="number" value={productForm.margen} onChange={e => handleProductPriceCalc('margen', e.target.value)} /></div>
+              </div>
+              <div className="form-row">
+                <div className="form-group"><label>Precio USD:</label><input type="number" value={productForm.precioUsd} onChange={e => handleProductPriceCalc('precioUsd', e.target.value)} /></div>
+                <div className="form-group"><label>Precio BS:</label><input type="number" value={productForm.precioBs} onChange={e => handleProductPriceCalc('precioBs', e.target.value)} /></div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="checkbox-label">
+                    <input type="checkbox" checked={productForm.stockPropio} onChange={e => setProductForm({...productForm, stockPropio: e.target.checked})} />
+                    Stock Propio
+                  </label>
                 </div>
-                <div className="form-row">
-                  <div className="form-group"><label>Costo USD:</label><input type="number" value={productForm.costoUsd} onChange={e => handleProductPriceCalc('costoUsd', e.target.value)} /></div>
-                  <div className="form-group"><label>Margen (%):</label><input type="number" value={productForm.margen} onChange={e => handleProductPriceCalc('margen', e.target.value)} /></div>
-                </div>
-                <div className="form-row">
-                  <div className="form-group"><label>Precio USD:</label><input type="number" value={productForm.precioUsd} onChange={e => handleProductPriceCalc('precioUsd', e.target.value)} /></div>
-                  <div className="form-group"><label>Precio BS:</label><input type="number" value={productForm.precioBs} onChange={e => handleProductPriceCalc('precioBs', e.target.value)} /></div>
-                </div>
-                <div className="form-row">
-                  <div className="form-group"><label>Stock Inicial:</label><input type="number" value={productForm.stock} onChange={e => setProductForm({...productForm, stock: parseInt(e.target.value) || 0})} /></div>
-                  <div className="form-group"><label>Stock Minimo:</label><input type="number" value={productForm.stockMin} onChange={e => setProductForm({...productForm, stockMin: parseInt(e.target.value) || 5})} /></div>
-                </div>
-                <div className="modal-footer">
-                   <button className="btn" onClick={onClose}>Cancelar</button>
-                   <button className="btn btn-success" onClick={saveProduct}>💾 Guardar</button>
+                <div className="form-group">
+                  <label className="checkbox-label">
+                    <input type="checkbox" checked={productForm.isKit} onChange={e => setProductForm({...productForm, isKit: e.target.checked})} />
+                    Es Kit/Combo
+                  </label>
                 </div>
               </div>
-            )}
-            {activeModal === 'modalProcesar' && (
-              <div>
-                 <h3>Confirmar Venta</h3>
-                 <p>Total a pagar: <strong>${cart.reduce((s, i) => s + (i.precioUsd * i.cantidad * (1 + i.iva / 100)), 0).toFixed(2)}</strong></p>
-                 <div className="modal-footer">
-                    <button className="btn" onClick={onClose}>Cancelar</button>
-                    <button className="btn btn-success" onClick={confirmSale}>✅ Confirmar</button>
-                 </div>
+              <div className="modal-footer">
+                 <button className="btn" onClick={onClose}>Cancelar</button>
+                 <button className="btn btn-success" onClick={saveProduct}>💾 Guardar</button>
               </div>
-            )}
-            {/* Otros modales seguirían la misma estructura original */}
-          </div>
+            </div>
+          )}
+
+          {activeModal === 'modalEntrada' && (
+            <form onSubmit={saveInventoryEntry} className="space-y-4">
+              <div className="form-group">
+                <label>Producto:</label>
+                <select name="entProducto" className="w-full">
+                  {products.map((p, i) => (
+                    <option key={i} value={i}>{p.codigo} - {p.descripcion}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-row">
+                <div className="form-group"><label>Cantidad:</label><input type="number" name="entCantidad" required /></div>
+                <div className="form-group"><label>Costo Unit USD:</label><input type="number" name="entCosto" step="0.01" required /></div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+                <button type="submit" className="btn btn-success">📥 Registrar</button>
+              </div>
+            </form>
+          )}
+
+          {activeModal === 'modalProcesar' && (
+            <div>
+               <h3>Confirmar Venta</h3>
+               <p>Total a pagar: <strong>${cart.reduce((s, i) => s + (i.precioUsd * i.cantidad * (1 + i.iva / 100)), 0).toFixed(2)}</strong></p>
+               <div className="modal-footer">
+                  <button className="btn" onClick={onClose}>Cancelar</button>
+                  <button className="btn btn-success" onClick={confirmSale}>✅ Confirmar</button>
+               </div>
+            </div>
+          )}
         </div>
       </div>
-    </>
+    </div>
   );
 }

@@ -19,6 +19,7 @@ export interface Product {
   stockPropio: boolean;
   activo: boolean;
   cpp?: number;
+  barcode?: string;
 }
 
 export interface Client {
@@ -72,4 +73,13 @@ export interface Account {
   estado: 'Pendiente' | 'Parcial' | 'Pagada';
   referencia: string;
   tipo: 'CXC' | 'CXP';
+}
+
+export interface Presupuesto {
+  numero: string;
+  fecha: string;
+  cliente: string;
+  items: CartItem[];
+  totalUsd: number;
+  estado: 'Pendiente' | 'Aprobado';
 }

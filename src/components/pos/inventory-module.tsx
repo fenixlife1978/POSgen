@@ -16,13 +16,13 @@ export function InventoryModule({ active, onOpenModal, products }: InventoryModu
   const totalValor = products.reduce((s, p) => s + (p.stock * (p.cpp || p.costoUsd)), 0);
 
   return (
-    <div id="module-inventario" className="module-panel active">
+    <div className="module-panel active">
       <h2 style={{ color: '#000080', marginBottom: '12px' }}> Control de Inventario</h2>
       <div className="toolbar">
         <button onClick={() => onOpenModal('modalEntrada')}>📥 Entrada Compra (CPP)</button>
         <button onClick={() => onOpenModal('modalSalida')}>📤 Salida</button>
         <button onClick={() => onOpenModal('modalAjuste')}>🔧 Ajuste</button>
-        <button>📊 Reporte General</button>
+        <button>📊 Reporte General (CPP)</button>
       </div>
       <div className="dashboard-grid" style={{ marginBottom: '12px' }}>
         <div className="dash-card"><div className="dash-value">{products.length}</div><div className="dash-label">Total Productos</div></div>
@@ -36,9 +36,10 @@ export function InventoryModule({ active, onOpenModal, products }: InventoryModu
             <tr>
               <th>Código</th>
               <th>Descripción</th>
-              <th>CPP</th>
+              <th>Costo (CPP)</th>
               <th>Stock</th>
               <th>Min</th>
+              <th>Valor (CPP)</th>
               <th>Estado</th>
             </tr>
           </thead>
@@ -50,6 +51,7 @@ export function InventoryModule({ active, onOpenModal, products }: InventoryModu
                 <td>${(p.cpp || p.costoUsd).toFixed(2)}</td>
                 <td>{p.stock}</td>
                 <td>{p.stockMin}</td>
+                <td>${((p.stock) * (p.cpp || p.costoUsd)).toFixed(2)}</td>
                 <td>{p.stock <= p.stockMin ? (p.stock === 0 ? '🔴' : '🟡') : '🟢'}</td>
               </tr>
             ))}
