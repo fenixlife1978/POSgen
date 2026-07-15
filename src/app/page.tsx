@@ -32,7 +32,7 @@ export default function POSPage() {
   const [dateTime, setDateTime] = useState('');
   const [activeModal, setActiveModal] = useState<string | null>(null);
   
-  // CRUD States
+  // Search States
   const [prodSearch, setProdSearch] = useState('');
   const [clientSearch, setClientSearch] = useState('');
   const [selectedProductIdx, setSelectedProductIdx] = useState(-1);
@@ -129,7 +129,7 @@ export default function POSPage() {
   }, [products]);
 
   const addToCart = (product: Product) => {
-    if (product.stock <= 0 && product.categoria !== 'Servicio') { alert('Sin stock'); return; }
+    if (product.stock <= 0 && product.categoria !== 'Servicio') { alert('Sin stock disponible'); return; }
     const index = products.indexOf(product);
     setPosCart(prev => {
       const existing = prev.find(item => item.productIndex === index);
@@ -454,8 +454,8 @@ export default function POSPage() {
           <div className="p-4 flex flex-col h-full overflow-hidden">
             <h2 className="text-2xl font-bold text-[#000080] mb-2 uppercase">🧾 Historial de Ventas</h2>
             <div className="toolbar flex gap-1 mb-2 bg-[#c0c0c0] p-1 border border-[#808080]">
-              <button className="win-btn" onClick={() => setActiveModal('modalFiltroVentas')}>🔍 Filtrar</button>
-              <button className="win-btn" onClick={() => { if(selectedSaleIdx >= 0) alert('Detalle de factura: ' + sales[selectedSaleIdx].numero) }}>👁️ Ver Detalle</button>
+              <button className="win-btn">🔍 Filtrar</button>
+              <button className="win-btn" onClick={() => { if(selectedSaleIdx >= 0) alert('Factura: ' + sales[selectedSaleIdx].numero) }}>👁️ Ver Detalle</button>
               <button className="win-btn" onClick={() => { if(selectedSaleIdx >= 0) window.print() }}>🖨️ Imprimir</button>
               <button className="win-btn" onClick={voidSale}>❌ Anular</button>
               <input type="date" className="win-input ml-auto w-40" value={ventaDateFrom} onChange={e => setVentaDateFrom(e.target.value)} />
@@ -487,12 +487,12 @@ export default function POSPage() {
           <div className="p-4 flex flex-col h-full overflow-hidden">
             <h2 className="text-2xl font-bold text-[#000080] mb-2 uppercase"> Control de Inventario</h2>
             <div className="toolbar flex gap-1 mb-4 bg-[#c0c0c0] p-1 border border-[#808080]">
-              <button className="win-btn" onClick={() => setActiveModal('modalEntrada')}>📥 Entrada</button>
-              <button className="win-btn" onClick={() => setActiveModal('modalSalida')}>📤 Salida</button>
-              <button className="win-btn" onClick={() => setActiveModal('modalAjuste')}>🔧 Ajuste</button>
+              <button className="win-btn">📥 Entrada</button>
+              <button className="win-btn">📤 Salida</button>
+              <button className="win-btn">🔧 Ajuste</button>
               <button className="win-btn" onClick={() => alert('Reporte generado')}>📊 Reporte</button>
             </div>
-            <div className="dashboard-grid mb-4">
+            <div className="grid grid-cols-4 gap-3 mb-4">
               <div className="dash-card"><div className="dash-value">{products.length}</div><div className="dash-label">Total Productos</div></div>
               <div className="dash-card"><div className="dash-value">${inventoryStats.totalVal.toFixed(2)}</div><div className="dash-label">Valor Inventario</div></div>
               <div className="dash-card"><div className="dash-value text-orange-600">{inventoryStats.bajo}</div><div className="dash-label">Stock Bajo</div></div>
@@ -518,7 +518,7 @@ export default function POSPage() {
         {activeModule === 'reportes' && (
           <div className="p-4 flex flex-col h-full overflow-hidden">
             <h2 className="text-2xl font-bold text-[#000080] mb-4 uppercase">📈 Reportes</h2>
-            <div className="dashboard-grid">
+            <div className="grid grid-cols-3 gap-4">
               <div className="dash-card cursor-pointer hover:bg-[#dce8f0]" onClick={() => generateReport('ventas')}>
                 <div className="dash-value text-xl">🧾</div><div className="dash-label font-bold">Reporte de Ventas</div>
               </div>
@@ -549,40 +549,43 @@ export default function POSPage() {
         {activeModule === 'config' && (
           <div className="p-4 overflow-auto h-full">
             <h2 className="text-2xl font-bold text-[#000080] mb-4 uppercase">⚙️ Configuración</h2>
-
-            <div className="settings-section">
+            <div className="bg-white border-2 border-[#808080] p-4 mb-4">
               <h3 className="font-bold border-b-2 border-[#000080] mb-4 pb-1">💱 Tasa de Cambio</h3>
               <div className="grid grid-cols-3 gap-4">
-                <div className="form-group"><label>Tasa USD/BS:</label><input type="number" step="0.01" className="win-input" value={config.tasa} onChange={e => setConfig({ ...config, tasa: parseFloat(e.target.value) || 0 })} /></div>
-                <div className="form-group"><label>IGTF (%):</label><input type="number" step="0.1" className="win-input" value={config.igtf} onChange={e => setConfig({ ...config, igtf: parseFloat(e.target.value) || 0 })} /></div>
-                <div className="form-group"><label>IVA (%):</label><input type="number" step="0.1" className="win-input" value={config.iva} onChange={e => setConfig({ ...config, iva: parseFloat(e.target.value) || 0 })} /></div>
+                <div className="flex flex-col gap-1"><label>Tasa USD/BS:</label><input type="number" step="0.01" className="win-input" value={config.tasa} onChange={e => setConfig({ ...config, tasa: parseFloat(e.target.value) || 0 })} /></div>
+                <div className="flex flex-col gap-1"><label>IGTF (%):</label><input type="number" step="0.1" className="win-input" value={config.igtf} onChange={e => setConfig({ ...config, igtf: parseFloat(e.target.value) || 0 })} /></div>
+                <div className="flex flex-col gap-1"><label>IVA (%):</label><input type="number" step="0.1" className="win-input" value={config.iva} onChange={e => setConfig({ ...config, iva: parseFloat(e.target.value) || 0 })} /></div>
               </div>
             </div>
-
-            <div className="settings-section mt-4">
-              <h3 className="font-bold border-b-2 border-[#000080] mb-4 pb-1">🏪 Datos de la Empresa</h3>
+            <div className="bg-white border-2 border-[#808080] p-4 mb-4">
+              <h3 className="font-bold border-b-2 border-[#000080] mb-4 pb-1">🏪 Empresa</h3>
               <div className="grid grid-cols-2 gap-4">
-                <div className="form-group"><label>RIF:</label><input className="win-input" value={config.rifEmpresa} onChange={e => setConfig({ ...config, rifEmpresa: e.target.value })} /></div>
-                <div className="form-group"><label>Nombre:</label><input className="win-input" value={config.nombreEmpresa} onChange={e => setConfig({ ...config, nombreEmpresa: e.target.value })} /></div>
+                <div className="flex flex-col gap-1"><label>RIF:</label><input className="win-input" value={config.rifEmpresa} onChange={e => setConfig({ ...config, rifEmpresa: e.target.value })} /></div>
+                <div className="flex flex-col gap-1"><label>Nombre:</label><input className="win-input" value={config.nombreEmpresa} onChange={e => setConfig({ ...config, nombreEmpresa: e.target.value })} /></div>
               </div>
-              <div className="form-group mt-2"><label>Dirección:</label><input className="win-input" value={config.direccion} onChange={e => setConfig({ ...config, direccion: e.target.value })} /></div>
             </div>
-
-            <div className="settings-section mt-4">
-              <h3 className="font-bold border-b-2 border-[#000080] mb-4 pb-1">💾 Respaldo de Datos</h3>
+            <div className="bg-white border-2 border-[#808080] p-4">
+              <h3 className="font-bold border-b-2 border-[#000080] mb-4 pb-1">💾 Datos</h3>
               <div className="flex gap-2">
-                <button className="win-btn bg-green-700 text-white px-6" onClick={backupData}>📤 Exportar Respaldo</button>
-                <button className="win-btn bg-orange-600 text-white px-6" onClick={() => document.getElementById('fullRestore')?.click()}>📥 Importar Respaldo</button>
+                <button className="win-btn bg-green-700 text-white px-6" onClick={backupData}>📤 Exportar</button>
+                <button className="win-btn bg-orange-600 text-white px-6" onClick={() => document.getElementById('fullRestore')?.click()}>📥 Importar</button>
                 <input type="file" id="fullRestore" className="hidden" accept=".json" onChange={restoreData} />
-                <button className="win-btn bg-red-700 text-white px-6 ml-auto" onClick={clearAllData}>🗑️ Limpiar Todo</button>
+                <button className="win-btn bg-red-700 text-white px-6 ml-auto" onClick={clearAllData}>🗑️ Limpiar</button>
               </div>
             </div>
-
             <div className="text-center mt-8">
-              <button className="win-btn bg-blue-800 text-white py-2 px-10 text-lg" onClick={() => alert('Configuración guardada')}>💾 Guardar Configuración</button>
+              <button className="win-btn bg-blue-800 text-white py-2 px-10 text-lg" onClick={() => alert('Guardado')}>💾 Guardar</button>
             </div>
           </div>
         )}
+      </div>
+
+      {/* --- STATUS BAR --- */}
+      <div className="bg-[#c0c0c0] border-t-2 border-white px-2 py-1 flex justify-between text-[11px] h-8 items-center">
+        <span className="border border-[#808080] px-2 text-black bg-[#e0e0e0] h-full flex items-center">Usuario: Admin</span>
+        <span className="border border-[#808080] px-2 text-black bg-[#e0e0e0] h-full flex items-center">Conectado - DB: LocalStorage</span>
+        <span className="border border-[#808080] px-2 text-black bg-[#e0e0e0] h-full flex items-center">Vendedor: {config.vendedor}</span>
+        <span className="border border-[#808080] px-2 text-black bg-[#e0e0e0] h-full flex items-center">Última Venta: {sales.length > 0 ? sales[sales.length-1].numero : '--'}</span>
       </div>
 
       {/* --- MODALS --- */}
@@ -653,19 +656,14 @@ export default function POSPage() {
             }}>
               <div className="p-3 space-y-3">
                 <div className="grid grid-cols-2 gap-3 text-black">
-                  <div className="form-group"><label>Código:</label><input name="codigo" defaultValue={editingProduct?.codigo} className="win-input w-full" required /></div>
-                  <div className="form-group"><label>Categoría:</label><select name="categoria" defaultValue={editingProduct?.categoria || 'Repuesto'} className="win-input w-full"><option>Repuesto</option><option>Lubricante</option><option>Servicio</option></select></div>
+                  <div className="flex flex-col gap-1"><label>Código:</label><input name="codigo" defaultValue={editingProduct?.codigo} className="win-input w-full" required /></div>
+                  <div className="flex flex-col gap-1"><label>Categoría:</label><select name="categoria" defaultValue={editingProduct?.categoria || 'Repuesto'} className="win-input w-full"><option>Repuesto</option><option>Lubricante</option><option>Servicio</option></select></div>
                 </div>
-                <div className="form-group text-black"><label>Descripción:</label><input name="descripcion" defaultValue={editingProduct?.descripcion} className="win-input w-full" required /></div>
+                <div className="flex flex-col gap-1 text-black"><label>Descripción:</label><input name="descripcion" defaultValue={editingProduct?.descripcion} className="win-input w-full" required /></div>
                 <div className="grid grid-cols-3 gap-3 text-black">
-                  <div className="form-group"><label>Precio USD:</label><input name="precioUsd" type="number" step="0.01" defaultValue={editingProduct?.precioUsd || 0} className="win-input w-full" /></div>
-                  <div className="form-group"><label>Costo USD:</label><input name="costoUsd" type="number" step="0.01" defaultValue={editingProduct?.costoUsd || 0} className="win-input w-full" /></div>
-                  <div className="form-group"><label>IVA %:</label><input name="iva" type="number" defaultValue={editingProduct?.iva || 16} className="win-input w-full" /></div>
-                </div>
-                <div className="grid grid-cols-3 gap-3 text-black">
-                  <div className="form-group"><label>Stock Actual:</label><input name="stock" type="number" defaultValue={editingProduct?.stock || 0} className="win-input w-full" /></div>
-                  <div className="form-group"><label>Stock Mínimo:</label><input name="stockMin" type="number" defaultValue={editingProduct?.stockMin || 5} className="win-input w-full" /></div>
-                  <div className="form-group"><label>Unidad:</label><input name="unidad" defaultValue={editingProduct?.unidad || 'Unidad'} className="win-input w-full" /></div>
+                  <div className="flex flex-col gap-1"><label>Precio USD:</label><input name="precioUsd" type="number" step="0.01" defaultValue={editingProduct?.precioUsd || 0} className="win-input w-full" /></div>
+                  <div className="flex flex-col gap-1"><label>Costo USD:</label><input name="costoUsd" type="number" step="0.01" defaultValue={editingProduct?.costoUsd || 0} className="win-input w-full" /></div>
+                  <div className="flex flex-col gap-1"><label>IVA %:</label><input name="iva" type="number" defaultValue={editingProduct?.iva || 16} className="win-input w-full" /></div>
                 </div>
               </div>
               <div className="p-3 border-t border-[#808080] flex justify-end gap-2">
@@ -676,60 +674,6 @@ export default function POSPage() {
           </div>
         </div>
       )}
-
-      {activeModal === 'modalCliente' && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1000]">
-          <div className="win-window w-[600px] max-w-full">
-            <div className="win-titlebar"><span>👥 {editingClient ? 'Editar' : 'Nuevo'} Cliente</span><button className="win-btn py-0 px-2" onClick={() => setActiveModal(null)}>✕</button></div>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const formData = new FormData(e.currentTarget);
-              const newCli: Client = {
-                tipoRif: formData.get('tipoRif') as string,
-                rifNum: formData.get('rifNum') as string,
-                nombre: formData.get('nombre') as string,
-                telefono: formData.get('telefono') as string,
-                email: formData.get('email') as string,
-                direccion: formData.get('direccion') as string,
-                tipo: formData.get('tipo') as string,
-                credito: parseFloat(formData.get('credito') as string),
-                saldo: editingClient?.saldo || 0
-              };
-              if (selectedClientIdx >= 0) setClients(prev => prev.map((c, i) => i === selectedClientIdx ? newCli : c));
-              else setClients(prev => [...prev, newCli]);
-              setActiveModal(null);
-            }}>
-              <div className="p-3 space-y-3">
-                <div className="grid grid-cols-4 gap-3 text-black">
-                  <div className="form-group"><label>Tipo RIF:</label><select name="tipoRif" defaultValue={editingClient?.tipoRif || 'V'} className="win-input w-full"><option>V</option><option>J</option><option>G</option><option>E</option></select></div>
-                  <div className="form-group col-span-3"><label>Nro RIF:</label><input name="rifNum" defaultValue={editingClient?.rifNum} className="win-input w-full" required /></div>
-                </div>
-                <div className="form-group text-black"><label>Nombre / Razón Social:</label><input name="nombre" defaultValue={editingClient?.nombre} className="win-input w-full" required /></div>
-                <div className="grid grid-cols-2 gap-3 text-black">
-                  <div className="form-group"><label>Teléfono:</label><input name="telefono" defaultValue={editingClient?.telefono} className="win-input w-full" /></div>
-                  <div className="form-group"><label>Email:</label><input name="email" type="email" defaultValue={editingClient?.email} className="win-input w-full" /></div>
-                </div>
-                <div className="grid grid-cols-2 gap-3 text-black">
-                  <div className="form-group"><label>Tipo Cliente:</label><select name="tipo" defaultValue={editingClient?.tipo || 'Regular'} className="win-input w-full"><option>Regular</option><option>Mayorista</option><option>Taller</option></select></div>
-                  <div className="form-group"><label>Crédito Lim:</label><input name="credito" type="number" step="0.01" defaultValue={editingClient?.credito || 0} className="win-input w-full" /></div>
-                </div>
-              </div>
-              <div className="p-3 border-t border-[#808080] flex justify-end gap-2">
-                <button type="button" className="win-btn" onClick={() => setActiveModal(null)}>Cancelar</button>
-                <button type="submit" className="win-btn bg-[#40a040] text-white">💾 Guardar</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* --- STATUS BAR --- */}
-      <div className="bg-[#c0c0c0] border-t-2 border-white px-2 py-1 flex justify-between text-[11px]">
-        <span className="border border-[#808080] px-2 text-black">Usuario: Admin</span>
-        <span className="border border-[#808080] px-2 text-black">Conectado - DB: LocalStorage</span>
-        <span className="border border-[#808080] px-2 text-black">Vendedor: {config.vendedor}</span>
-        <span className="border border-[#808080] px-2 text-black" id="statusLastSale">Última Venta: {sales.length > 0 ? sales[sales.length-1].numero : '--'}</span>
-      </div>
     </div>
   );
 }
