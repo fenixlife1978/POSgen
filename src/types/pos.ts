@@ -2,6 +2,7 @@
 export interface Product {
   codigo: string;
   descripcion: string;
+  nombre: string;
   barcode?: string;
   referencia?: string;
   marca: string;
@@ -10,6 +11,7 @@ export interface Product {
   
   // Clasificación
   departamento: string;
+  categoria: string;
   grupo?: string;
   subgrupo?: string;
   ubicacion: string;
@@ -18,10 +20,11 @@ export interface Product {
   costoAnterior: number;
   costoActual: number;
   costoPromedio: number; // CPP
-  utilidadPorcentaje: number; // % utilidad financiera
+  utilidadPorcentaje: number; // % utilidad financiera (Markup sobre venta)
   precio1: number; // Detal
   precio2: number; // Mayor
   precio3: number; // Corporativo
+  precio4: number; // Promoción
   ivaAlicuota: number;
   
   // Controles
@@ -33,13 +36,21 @@ export interface Product {
   manejaTallasColores: boolean;
   capacidadContenido?: number;
   manejaPeso: boolean;
+  
+  // Lógica Kit
   isKit: boolean;
-  stockPropio: boolean;
+  stockPropio: boolean; // True = Físico, False = Virtual (depende de componentes)
+  kitComponents: KitComponent[];
   
   // Existencias
   stock: number;
   stockMin: number;
-  categoria: string; // Para compatibilidad con modulos existentes
+}
+
+export interface KitComponent {
+  productIndex: number;
+  codigo: string;
+  cantidad: number;
 }
 
 export interface Client {
