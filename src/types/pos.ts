@@ -2,24 +2,44 @@
 export interface Product {
   codigo: string;
   descripcion: string;
-  categoria: string;
+  barcode?: string;
+  referencia?: string;
   marca: string;
-  modelo: string;
-  departamento: string;
-  precioUsd: number;
-  precioBs: number;
-  costoUsd: number;
-  margen: number;
-  iva: number;
-  stock: number;
-  stockMin: number;
   unidad: string;
+  moneda: 'base' | 'alterna';
+  
+  // Clasificación
+  departamento: string;
+  grupo?: string;
+  subgrupo?: string;
   ubicacion: string;
+  
+  // Costos y Precios
+  costoAnterior: number;
+  costoActual: number;
+  costoPromedio: number; // CPP
+  utilidadPorcentaje: number; // % utilidad financiera
+  precio1: number; // Detal
+  precio2: number; // Mayor
+  precio3: number; // Corporativo
+  ivaAlicuota: number;
+  
+  // Controles
+  permiteDescuento: boolean;
+  activo: boolean;
+  manejaSeriales: boolean;
+  manejaLotes: boolean;
+  fechaVencimiento?: string;
+  manejaTallasColores: boolean;
+  capacidadContenido?: number;
+  manejaPeso: boolean;
   isKit: boolean;
   stockPropio: boolean;
-  activo: boolean;
-  cpp?: number;
-  barcode?: string;
+  
+  // Existencias
+  stock: number;
+  stockMin: number;
+  categoria: string; // Para compatibilidad con modulos existentes
 }
 
 export interface Client {
