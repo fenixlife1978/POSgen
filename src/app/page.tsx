@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Product, Client, CartItem, Sale, Presupuesto } from '@/types/pos';
+import { Product, Client, CartItem, Sale } from '@/types/pos';
 import { format } from 'date-fns';
 
 const INITIAL_PRODUCTS: Product[] = [
@@ -32,6 +32,14 @@ export default function POSPage() {
   const [dateTime, setDateTime] = useState('');
   const [activeModal, setActiveModal] = useState<string | null>(null);
   
+  // States for CRUD
+  const [prodSearch, setProdSearch] = useState('');
+  const [clientSearch, setClientSearch] = useState('');
+  const [selectedProductIdx, setSelectedProductIdx] = useState(-1);
+  const [selectedClientIdx, setSelectedClientIdx] = useState(-1);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
+
   const [config, setConfig] = useState({
     tasa: 724.00,
     igtf: 3,
@@ -72,6 +80,28 @@ export default function POSPage() {
     return { subtotal, totalIva, totalUsd, totalBs: totalUsd * config.tasa, igtfAmount: totalUsd * (config.igtf / 100), totalUnits };
   }, [posCart, config]);
 
+  // Dashboard calculations
+  const dashboardStats = useMemo(() => {
+    const today = new Date().toDateString();
+    const todaySales = sales.filter(s => new Date(s.fecha).toDateString() === today && s.estado === 'Completada');
+    const montoHoy = todaySales.reduce((sum, s) => sum + s.totalUsd, 0);
+    const itemsHoy = todaySales.reduce((sum, s) => sum + s.items.reduce((acc, it) => acc + it.cantidad, 0), 0);
+    const clientesHoy = new Set(todaySales.map(s => s.rif)).size;
+    const stockBajo = products.filter(p => p.stock <= p.stockMin && p.activo).length;
+
+    // Weekly data
+    const weeklyData = Array(7).fill(0).map((_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      const ds = d.toDateString();
+      const val = sales.filter(s => new Date(s.fecha).toDateString() === ds && s.estado === 'Completada')
+                      .reduce((sum, s) => sum + s.totalUsd, 0);
+      return { day: format(d, 'eee'), value: val };
+    });
+
+    return { todaySalesCount: todaySales.length, montoHoy, itemsHoy, clientesHoy, stockBajo, weeklyData };
+  }, [sales, products]);
+
   const addToCart = (product: Product) => {
     if (product.stock <= 0 && product.categoria !== 'Servicio') { alert('Sin stock'); return; }
     const index = products.indexOf(product);
@@ -85,7 +115,26 @@ export default function POSPage() {
 
   const confirmSale = () => {
     const invoiceNum = 'F-' + String(config.nextInvoice).padStart(4, '0');
-    setSales(prev => [...prev, { numero: invoiceNum, fecha: new Date().toISOString(), cliente: posCliente || 'Consumidor Final', rif: posRif || 'V-00000000-0', vendedor: config.vendedor, items: [...posCart], subtotal: totals.subtotal, iva: totals.totalIva, totalUsd: totals.totalUsd, totalBs: totals.totalBs, pago: paymentState.selectedMethod, recibidoUsd: paymentState.receivedUsd, recibidoBs: paymentState.receivedBs, cambioUsd: (paymentState.receivedUsd + paymentState.receivedBs/config.tasa) - totals.totalUsd, referencia: paymentState.reference, credito: false, estado: 'Completada' }]);
+    const newSale: Sale = { 
+      numero: invoiceNum, 
+      fecha: new Date().toISOString(), 
+      cliente: posCliente || 'Consumidor Final', 
+      rif: posRif || 'V-00000000-0', 
+      vendedor: config.vendedor, 
+      items: [...posCart], 
+      subtotal: totals.subtotal, 
+      iva: totals.totalIva, 
+      totalUsd: totals.totalUsd, 
+      totalBs: totals.totalBs, 
+      pago: paymentState.selectedMethod, 
+      recibidoUsd: paymentState.receivedUsd, 
+      recibidoBs: paymentState.receivedBs, 
+      cambioUsd: (paymentState.receivedUsd + paymentState.receivedBs/config.tasa) - totals.totalUsd, 
+      referencia: paymentState.reference, 
+      credito: false, 
+      estado: 'Completada' 
+    };
+    setSales(prev => [...prev, newSale]);
     setProducts(prev => prev.map((p, i) => {
       const item = posCart.find(it => it.productIndex === i);
       return item && p.categoria !== 'Servicio' ? { ...p, stock: p.stock - item.cantidad } : p;
@@ -93,6 +142,60 @@ export default function POSPage() {
     setConfig(prev => ({ ...prev, nextInvoice: prev.nextInvoice + 1 }));
     setPosCart([]); setPosCliente(''); setPosRif(''); setActiveModal(null);
     alert(`Venta exitosa: ${invoiceNum}`);
+  };
+
+  const saveProduct = (e: React.FormEvent) => {
+    e.preventDefault();
+    const form = e.target as HTMLFormElement;
+    const formData = new FormData(form);
+    const newProd: Product = {
+      codigo: formData.get('codigo') as string,
+      descripcion: formData.get('descripcion') as string,
+      categoria: formData.get('categoria') as string,
+      marca: formData.get('marca') as string,
+      modelo: formData.get('modelo') as string,
+      precioUsd: parseFloat(formData.get('precioUsd') as string),
+      costoUsd: parseFloat(formData.get('costoUsd') as string),
+      iva: parseFloat(formData.get('iva') as string),
+      stock: parseInt(formData.get('stock') as string),
+      stockMin: parseInt(formData.get('stockMin') as string),
+      unidad: formData.get('unidad') as string,
+      ubicacion: formData.get('ubicacion') as string,
+      activo: true
+    };
+
+    if (selectedProductIdx >= 0) {
+      setProducts(prev => prev.map((p, i) => i === selectedProductIdx ? newProd : p));
+      setSelectedProductIdx(-1);
+    } else {
+      setProducts(prev => [...prev, newProd]);
+    }
+    setActiveModal(null);
+  };
+
+  const saveClient = (e: React.FormEvent) => {
+    e.preventDefault();
+    const form = e.target as HTMLFormElement;
+    const formData = new FormData(form);
+    const newCli: Client = {
+      tipoRif: formData.get('tipoRif') as string,
+      rifNum: formData.get('rifNum') as string,
+      nombre: formData.get('nombre') as string,
+      telefono: formData.get('telefono') as string,
+      email: formData.get('email') as string,
+      direccion: formData.get('direccion') as string,
+      tipo: formData.get('tipo') as string,
+      credito: parseFloat(formData.get('credito') as string),
+      saldo: 0
+    };
+
+    if (selectedClientIdx >= 0) {
+      setClients(prev => prev.map((c, i) => i === selectedClientIdx ? { ...newCli, saldo: c.saldo } : c));
+      setSelectedClientIdx(-1);
+    } else {
+      setClients(prev => [...prev, newCli]);
+    }
+    setActiveModal(null);
   };
 
   return (
@@ -189,7 +292,112 @@ export default function POSPage() {
           </div>
         )}
 
-        {activeModule !== 'pos' && (
+        {activeModule === 'dashboard' && (
+          <div className="p-4 overflow-auto">
+            <h2 className="text-2xl font-bold text-[#000080] mb-4 uppercase">Dashboard - Resumen General</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+              <div className="dash-card">
+                <div className="dash-value">{dashboardStats.todaySalesCount}</div>
+                <div className="dash-label">Ventas Hoy</div>
+              </div>
+              <div className="dash-card">
+                <div className="dash-value">${dashboardStats.montoHoy.toFixed(2)}</div>
+                <div className="dash-label">Monto Hoy (USD)</div>
+              </div>
+              <div className="dash-card">
+                <div className="dash-value">{dashboardStats.itemsHoy}</div>
+                <div className="dash-label">Items Vendidos</div>
+              </div>
+              <div className="dash-card">
+                <div className="dash-value">{dashboardStats.clientesHoy}</div>
+                <div className="dash-label">Clientes Atendidos</div>
+              </div>
+              <div className="dash-card">
+                <div className="dash-value text-red-700">{dashboardStats.stockBajo}</div>
+                <div className="dash-label">Stock Bajo</div>
+              </div>
+              <div className="dash-card">
+                <div className="dash-value">{config.tasa.toFixed(2)}</div>
+                <div className="dash-label">Tasa USD/BS</div>
+              </div>
+            </div>
+
+            <div className="bg-white border-2 border-[#808080] p-4 mb-6">
+              <h3 className="text-[#000080] font-bold mb-4">Ventas de la Semana (USD)</h3>
+              <div className="flex items-end gap-2 h-40">
+                {dashboardStats.weeklyData.map((d, i) => {
+                  const maxVal = Math.max(...dashboardStats.weeklyData.map(wd => wd.value), 1);
+                  const height = (d.value / maxVal) * 100;
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center group relative">
+                      <div className="w-full bg-[#0078d7] border border-[#000]" style={{ height: `${height}%` }}>
+                        <div className="hidden group-hover:block absolute -top-6 bg-black text-white px-1 text-[10px] whitespace-nowrap">${d.value.toFixed(2)}</div>
+                      </div>
+                      <span className="text-[10px] mt-1 font-bold">{d.day}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeModule === 'productos' && (
+          <div className="p-4 flex flex-col h-full overflow-hidden">
+            <h2 className="text-2xl font-bold text-[#000080] mb-2 uppercase">Gestión de Productos</h2>
+            <div className="toolbar flex gap-1 mb-2 bg-[#c0c0c0] p-1 border border-[#808080]">
+              <button className="win-btn" onClick={() => { setEditingProduct(null); setSelectedProductIdx(-1); setActiveModal('modalProducto'); }}>➕ Nuevo</button>
+              <button className="win-btn" onClick={() => { if(selectedProductIdx >= 0) { setEditingProduct(products[selectedProductIdx]); setActiveModal('modalProducto'); } }}>✏️ Editar</button>
+              <button className="win-btn" onClick={() => { if(selectedProductIdx >= 0 && confirm('Eliminar producto?')) setProducts(prev => prev.filter((_, i) => i !== selectedProductIdx)) }}>🗑️ Eliminar</button>
+              <input type="text" className="win-input ml-auto w-64" placeholder="Buscar producto..." value={prodSearch} onChange={e => setProdSearch(e.target.value)} />
+            </div>
+            <div className="flex-1 overflow-auto border-2 border-[#808080] bg-white">
+              <table className="w-full data-table">
+                <thead className="sticky top-0">
+                  <tr><th>Código</th><th>Descripción</th><th>Cat</th><th>Precio USD</th><th>Precio BS</th><th>Stock</th><th>IVA</th><th>Estado</th></tr>
+                </thead>
+                <tbody>
+                  {products.filter(p => p.codigo.toLowerCase().includes(prodSearch.toLowerCase()) || p.descripcion.toLowerCase().includes(prodSearch.toLowerCase())).map((p, i) => (
+                    <tr key={i} className={selectedProductIdx === products.indexOf(p) ? 'selected' : ''} onClick={() => setSelectedProductIdx(products.indexOf(p))}>
+                      <td>{p.codigo}</td><td>{p.descripcion}</td><td>{p.categoria}</td>
+                      <td className="text-right">${p.precioUsd.toFixed(2)}</td><td className="text-right">Bs {(p.precioUsd * config.tasa).toFixed(2)}</td>
+                      <td className="text-center">{p.stock}</td><td className="text-center">{p.iva}%</td>
+                      <td><span className={`px-2 py-0.5 rounded text-[10px] text-white ${p.stock <= p.stockMin ? 'bg-orange-600' : 'bg-green-600'}`}>{p.stock <= p.stockMin ? 'BAJO' : 'OK'}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeModule === 'clientes' && (
+          <div className="p-4 flex flex-col h-full overflow-hidden">
+            <h2 className="text-2xl font-bold text-[#000080] mb-2 uppercase">Gestión de Clientes</h2>
+            <div className="toolbar flex gap-1 mb-2 bg-[#c0c0c0] p-1 border border-[#808080]">
+              <button className="win-btn" onClick={() => { setEditingClient(null); setSelectedClientIdx(-1); setActiveModal('modalCliente'); }}>➕ Nuevo</button>
+              <button className="win-btn" onClick={() => { if(selectedClientIdx >= 0) { setEditingClient(clients[selectedClientIdx]); setActiveModal('modalCliente'); } }}>✏️ Editar</button>
+              <button className="win-btn" onClick={() => { if(selectedClientIdx >= 0 && confirm('Eliminar cliente?')) setClients(prev => prev.filter((_, i) => i !== selectedClientIdx)) }}>🗑️ Eliminar</button>
+              <input type="text" className="win-input ml-auto w-64" placeholder="Buscar cliente..." value={clientSearch} onChange={e => setClientSearch(e.target.value)} />
+            </div>
+            <div className="flex-1 overflow-auto border-2 border-[#808080] bg-white">
+              <table className="w-full data-table">
+                <thead className="sticky top-0">
+                  <tr><th>RIF</th><th>Nombre</th><th>Teléfono</th><th>Email</th><th>Saldo USD</th><th>Tipo</th></tr>
+                </thead>
+                <tbody>
+                  {clients.filter(c => c.nombre.toLowerCase().includes(clientSearch.toLowerCase()) || c.rifNum.includes(clientSearch)).map((c, i) => (
+                    <tr key={i} className={selectedClientIdx === clients.indexOf(c) ? 'selected' : ''} onClick={() => setSelectedClientIdx(clients.indexOf(c))}>
+                      <td>{c.tipoRif}-{c.rifNum}</td><td>{c.nombre}</td><td>{c.telefono}</td><td>{c.email}</td><td className="text-right">${c.saldo.toFixed(2)}</td><td>{c.tipo}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {!['pos', 'dashboard', 'productos', 'clientes'].includes(activeModule) && (
           <div className="p-4">
             <h2 className="text-2xl font-bold text-[#000080] mb-4 uppercase">{activeModule}</h2>
             <div className="bg-white border-2 border-[#808080] p-10 text-center">Módulo de {activeModule} en construcción.<br /><button className="win-btn mt-4 px-4 py-2" onClick={() => setActiveModule('pos')}>Volver al POS</button></div>
@@ -232,6 +440,72 @@ export default function POSPage() {
               </div>
             </div>
             <div className="p-3 border-t border-[#808080] flex justify-end gap-2"><button className="win-btn" onClick={() => setActiveModal(null)}>Cancelar</button><button className="win-btn bg-[#40a040] text-white" onClick={confirmSale}>✅ Confirmar Venta</button></div>
+          </div>
+        </div>
+      )}
+
+      {activeModal === 'modalProducto' && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1000]">
+          <div className="win-window w-[600px] max-w-full">
+            <div className="win-titlebar"><span>📦 {editingProduct ? 'Editar' : 'Nuevo'} Producto</span><button className="win-btn py-0 px-2" onClick={() => setActiveModal(null)}>✕</button></div>
+            <form onSubmit={saveProduct}>
+              <div className="p-3 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="form-group"><label>Código:</label><input name="codigo" defaultValue={editingProduct?.codigo} className="win-input" required /></div>
+                  <div className="form-group"><label>Categoría:</label><select name="categoria" defaultValue={editingProduct?.categoria || 'Repuesto'} className="win-input"><option>Repuesto</option><option>Lubricante</option><option>Servicio</option></select></div>
+                </div>
+                <div className="form-group"><label>Descripción:</label><input name="descripcion" defaultValue={editingProduct?.descripcion} className="win-input" required /></div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="form-group"><label>Precio USD:</label><input name="precioUsd" type="number" step="0.01" defaultValue={editingProduct?.precioUsd || 0} className="win-input" /></div>
+                  <div className="form-group"><label>Costo USD:</label><input name="costoUsd" type="number" step="0.01" defaultValue={editingProduct?.costoUsd || 0} className="win-input" /></div>
+                  <div className="form-group"><label>IVA %:</label><input name="iva" type="number" defaultValue={editingProduct?.iva || 16} className="win-input" /></div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="form-group"><label>Stock Actual:</label><input name="stock" type="number" defaultValue={editingProduct?.stock || 0} className="win-input" /></div>
+                  <div className="form-group"><label>Stock Mínimo:</label><input name="stockMin" type="number" defaultValue={editingProduct?.stockMin || 5} className="win-input" /></div>
+                  <div className="form-group"><label>Unidad:</label><input name="unidad" defaultValue={editingProduct?.unidad || 'Unidad'} className="win-input" /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="form-group"><label>Marca:</label><input name="marca" defaultValue={editingProduct?.marca} className="win-input" /></div>
+                  <div className="form-group"><label>Modelo:</label><input name="modelo" defaultValue={editingProduct?.modelo} className="win-input" /></div>
+                </div>
+                <div className="form-group"><label>Ubicación:</label><input name="ubicacion" defaultValue={editingProduct?.ubicacion} className="win-input" /></div>
+              </div>
+              <div className="p-3 border-t border-[#808080] flex justify-end gap-2">
+                <button type="button" className="win-btn" onClick={() => setActiveModal(null)}>Cancelar</button>
+                <button type="submit" className="win-btn bg-[#40a040] text-white">💾 Guardar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {activeModal === 'modalCliente' && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1000]">
+          <div className="win-window w-[600px] max-w-full">
+            <div className="win-titlebar"><span>👥 {editingClient ? 'Editar' : 'Nuevo'} Cliente</span><button className="win-btn py-0 px-2" onClick={() => setActiveModal(null)}>✕</button></div>
+            <form onSubmit={saveClient}>
+              <div className="p-3 space-y-3">
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="form-group"><label>Tipo RIF:</label><select name="tipoRif" defaultValue={editingClient?.tipoRif || 'V'} className="win-input"><option>V</option><option>J</option><option>G</option><option>E</option></select></div>
+                  <div className="form-group col-span-3"><label>Nro RIF:</label><input name="rifNum" defaultValue={editingClient?.rifNum} className="win-input" required /></div>
+                </div>
+                <div className="form-group"><label>Nombre / Razón Social:</label><input name="nombre" defaultValue={editingClient?.nombre} className="win-input" required /></div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="form-group"><label>Teléfono:</label><input name="telefono" defaultValue={editingClient?.telefono} className="win-input" /></div>
+                  <div className="form-group"><label>Email:</label><input name="email" type="email" defaultValue={editingClient?.email} className="win-input" /></div>
+                </div>
+                <div className="form-group"><label>Dirección:</label><input name="direccion" defaultValue={editingClient?.direccion} className="win-input" /></div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="form-group"><label>Tipo Cliente:</label><select name="tipo" defaultValue={editingClient?.tipo || 'Regular'} className="win-input"><option>Regular</option><option>Mayorista</option><option>Taller</option></select></div>
+                  <div className="form-group"><label>Crédito Lim:</label><input name="credito" type="number" step="0.01" defaultValue={editingClient?.credito || 0} className="win-input" /></div>
+                </div>
+              </div>
+              <div className="p-3 border-t border-[#808080] flex justify-end gap-2">
+                <button type="button" className="win-btn" onClick={() => setActiveModal(null)}>Cancelar</button>
+                <button type="submit" className="win-btn bg-[#40a040] text-white">💾 Guardar</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
