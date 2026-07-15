@@ -9,16 +9,20 @@ import { SalesModule } from '@/components/pos/sales-module';
 import { InventoryModule } from '@/components/pos/inventory-module';
 import { ReportsModule } from '@/components/pos/reports-module';
 import { ConfigModule } from '@/components/pos/config-module';
+import { Modals } from '@/components/pos/modals';
 
 export default function POSPage() {
   const [activeModule, setActiveModule] = useState('pos');
   const [activeModal, setActiveModal] = useState<string | null>(null);
 
   const openModal = (id: string) => setActiveModal(id);
-  const closeModal = (id: string) => setActiveModal(null);
+  const closeModal = () => setActiveModal(null);
 
   return (
     <div id="mainApp">
+      {/* Notification Placeholder */}
+      <div id="notification" className="notification"></div>
+
       {/* Dollar Bar */}
       <div className="dollar-bar">
         <span className="dollar-icon">💲</span>
@@ -58,20 +62,8 @@ export default function POSPage() {
         <span className="status-section">Última Venta: --</span>
       </div>
 
-      {/* Modals Container (Placeholder for logic) */}
-      {activeModal && (
-        <div className="modal-overlay active" onClick={() => setActiveModal(null)}>
-          <div className="modal-window" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-titlebar">
-              <span>{activeModal}</span>
-              <span className="modal-close" onClick={() => setActiveModal(null)}>✕</span>
-            </div>
-            <div className="modal-body">
-              Contenido del modal {activeModal} en desarrollo...
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Modals Container */}
+      <Modals activeModal={activeModal} onClose={closeModal} />
     </div>
   );
 }
