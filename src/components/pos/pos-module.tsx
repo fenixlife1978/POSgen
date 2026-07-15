@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Product, Client, CartItem } from '@/types/pos';
 
 interface PosModuleProps {
@@ -21,11 +21,20 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
   const [searchTerm, setSearchTerm] = useState('');
   const [searchDropdown, setSearchDropdown] = useState<Product[]>([]);
   const [clientInfo, setClientInfo] = useState({ name: '', rif: '', saldo: 0 });
+  const [dateTime, setDateTime] = useState('');
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      setDateTime(now.toLocaleString('es-VE'));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   if (!active) return null;
 
   const formatUSD = (n: number) => '$' + n.toFixed(2);
-  const formatBS = (n: number) => 'Bs. ' + n.toFixed(2);
+  const formatBS = (n: number) => 'Bs. ' + (n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
   const handleSearch = (query: string) => {
     setSearchTerm(query);
@@ -35,7 +44,7 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
     }
     const filtered = products.filter(p => 
       p.activo && (p.codigo.toLowerCase().includes(query.toLowerCase()) || p.descripcion.toLowerCase().includes(query.toLowerCase()))
-    ).slice(0, 10);
+    ).slice(0, 15);
     setSearchDropdown(filtered);
   };
 
@@ -73,12 +82,20 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
 
   const totals = getTotals();
 
+  const handleRifSearch = (rif: string) => {
+    setClientInfo(prev => ({ ...prev, rif }));
+    const client = clients.find(c => c.rifNum === rif || `${c.tipoRif}-${c.rifNum}` === rif);
+    if (client) {
+      setClientInfo({ name: client.nombre, rif: `${client.tipoRif}-${client.rifNum}`, saldo: client.saldo });
+    }
+  };
+
   return (
     <div id="module-pos" className="module-panel active" style={{ display: 'flex', flexDirection: 'column', padding: 0 }}>
       <div className="header-section">
         <div className="header-row">
           <label>Rif:</label>
-          <input type="text" id="posRif" value={clientInfo.rif} onChange={(e) => setClientInfo({...clientInfo, rif: e.target.value})} placeholder="V-00000000-0" style={{ width: '160px' }} />
+          <input type="text" id="posRif" value={clientInfo.rif} onChange={(e) => handleRifSearch(e.target.value)} placeholder="V-00000000-0" style={{ width: '160px' }} />
           <label className="checkbox-label"><input type="checkbox" id="posCredito" /> Crédito</label>
           <label>N/Vendedor:</label>
           <span className="vendedor-name" id="posVendedor">{config.vendedor}</span>
@@ -86,7 +103,7 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
             <button onClick={() => onOpenModal('modalRecuperar')}>📄 Recuperar Documento</button>
             <button onClick={() => onOpenModal('modalDescuento')}>🏷️ Aplicar Dscto</button>
           </div>
-          <div className="datetime-display" id="datetimeDisplay">15/07/2026 16:39:59</div>
+          <div className="datetime-display" id="datetimeDisplay">{dateTime}</div>
         </div>
         <div className="header-row">
           <label>Cliente:</label>
@@ -144,6 +161,9 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
                   <td className="col-total">{(item.precioUsd * item.cantidad * (1 + item.iva / 100)).toFixed(2)}</td>
                 </tr>
               ))}
+              {cart.length === 0 && (
+                <tr><td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: '#888' }}>Agregue productos usando la búsqueda...</td></tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -182,7 +202,7 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
         </div>
         <div className="total-box total-bs">
           <span className="total-label">Total Bs:</span>
-          <div className="total-value">{totals.totalBs.toFixed(2)}</div>
+          <div className="total-value">{totals.totalBs.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</div>
           <span className="total-label-sub">CAMBIO ULTIMA FACTURA</span>
         </div>
         <div className="total-box dolar-igtf">

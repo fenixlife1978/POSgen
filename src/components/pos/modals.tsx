@@ -51,7 +51,6 @@ export function Modals({
 
   if (!activeModal) return null;
 
-  // Markup Logic: Precio = Costo / (1 - Margen/100)
   const handleProductPriceCalc = (field: string, val: string) => {
     const num = parseFloat(val) || 0;
     let newForm = { ...productForm, [field]: num };
@@ -113,21 +112,30 @@ export function Modals({
     };
 
     setSales([...sales, newSale]);
+    
+    // Update Stock
+    const newProducts = [...products];
+    cart.forEach(item => {
+      const p = newProducts[item.productIndex];
+      if (p) p.stock -= item.cantidad;
+    });
+    setProducts(newProducts);
+
     setCart([]);
     notify(`✅ Venta ${saleNum} procesada`);
     onClose();
   };
 
-  const saveInventoryEntry = (e: any) => {
+  const saveInventoryEntry = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const prodIdx = parseInt(e.target.entProducto.value);
-    const qty = parseInt(e.target.entCantidad.value);
-    const costo = parseFloat(e.target.entCosto.value);
+    const formData = new FormData(e.currentTarget);
+    const prodIdx = parseInt(formData.get('entProducto') as string);
+    const qty = parseInt(formData.get('entCantidad') as string);
+    const costo = parseFloat(formData.get('entCosto') as string);
     
     const newProducts = [...products];
     const p = newProducts[prodIdx];
     
-    // CPP Logic: (StockActual * CPP + NuevaCant * NuevoCosto) / NuevoStockTotal
     const currentStock = p.stock || 0;
     const currentCpp = p.cpp || p.costoUsd || 0;
     const newStock = currentStock + qty;
@@ -135,7 +143,7 @@ export function Modals({
     
     p.stock = newStock;
     p.cpp = newCpp;
-    p.costoUsd = costo; // Update last cost
+    p.costoUsd = costo;
     
     setProducts(newProducts);
     notify('✅ Entrada registrada y CPP actualizado');
@@ -163,20 +171,6 @@ export function Modals({
               <div className="form-row">
                 <div className="form-group"><label>Precio USD:</label><input type="number" value={productForm.precioUsd} onChange={e => handleProductPriceCalc('precioUsd', e.target.value)} /></div>
                 <div className="form-group"><label>Precio BS:</label><input type="number" value={productForm.precioBs} onChange={e => handleProductPriceCalc('precioBs', e.target.value)} /></div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="checkbox-label">
-                    <input type="checkbox" checked={productForm.stockPropio} onChange={e => setProductForm({...productForm, stockPropio: e.target.checked})} />
-                    Stock Propio
-                  </label>
-                </div>
-                <div className="form-group">
-                  <label className="checkbox-label">
-                    <input type="checkbox" checked={productForm.isKit} onChange={e => setProductForm({...productForm, isKit: e.target.checked})} />
-                    Es Kit/Combo
-                  </label>
-                </div>
               </div>
               <div className="modal-footer">
                  <button className="btn" onClick={onClose}>Cancelar</button>

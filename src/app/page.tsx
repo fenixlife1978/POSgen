@@ -51,7 +51,7 @@ export default function POSPage() {
       if (data.presupuestos) setPresupuestos(data.presupuestos);
       if (data.config) setConfig(data.config);
     } else {
-      // Sample data
+      // Sample data matching original script
       setProducts([
         { codigo: 'ACE-5W30', descripcion: 'ACEITE MOTOR 5W-30 SYNTHETIC 1GL', categoria: 'Lubricante', marca: 'Mobil', modelo: 'Universal', departamento: 'Lubricantes', precioUsd: 28.50, precioBs: 28.50 * 724, costoUsd: 18.00, margen: 36.84, iva: 16, stock: 35, stockMin: 10, unidad: 'Galón', ubicacion: 'C-1', isKit: false, stockPropio: true, activo: true, cpp: 18.00 }
       ]);
