@@ -11,7 +11,7 @@ export function PosModule({ active, onOpenModal }: PosModuleProps) {
   if (!active) return null;
 
   return (
-    <div id="module-pos" class="module-panel active" style={{ display: 'flex', flexDirection: 'column', padding: 0 }}>
+    <div id="module-pos" className="module-panel active" style={{ display: 'flex', flexDirection: 'column', padding: 0 }}>
       {/* Header Section */}
       <div className="header-section">
         <div className="header-row">
