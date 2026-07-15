@@ -1,25 +1,16 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
-  --primary: 221.2 83.2% 53.3%;
-  --radius: 0.75rem;
-}
-
-/* ===== WINDOWS CLASSIC THEME BASE ===== */
+/* ===== WINDOWS CLASSIC THEME BASE (IDÉNTICO AL ORIGINAL) ===== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-  background: #008080;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: #008080;
   font-size: 13px;
   overflow: hidden;
   height: 100vh;
   user-select: none;
-  margin: 0;
-  padding: 0;
 }
 
 .win-window {
@@ -28,7 +19,6 @@ body {
   border-color: #fff #808080 #808080 #fff;
   box-shadow: 1px 1px 0 #000;
 }
-
 .win-titlebar {
   background: linear-gradient(90deg, #000080, #1084d0);
   color: white;
@@ -38,169 +28,95 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  cursor: default;
 }
-
-.win-btn {
+.win-titlebar .close-btn {
   background: #c0c0c0;
-  border: 2px solid;
+  border: 1px solid;
   border-color: #fff #808080 #808080 #fff;
-  padding: 4px 12px;
+  width: 20px; height: 18px;
   font-size: 11px;
-  cursor: pointer;
-  color: #000;
   font-weight: bold;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: #000;
 }
 
-.win-btn:active {
-  border-color: #808080 #fff #fff #808080;
-  padding: 5px 11px 3px 13px;
-}
-
-.win-input {
-  border: 2px solid;
-  border-color: #808080 #fff #fff #808080;
-  padding: 3px 6px;
-  font-size: 13px;
-  outline: none;
-  background: white;
-}
-
-.win-input:focus {
-  border-color: #000080;
-}
-
-/* Scrollbar styling */
-::-webkit-scrollbar { width: 16px; height: 16px; }
-::-webkit-scrollbar-track { background: #c0c0c0; border: 1px solid #808080; }
-::-webkit-scrollbar-thumb { background: #c0c0c0; border: 2px solid; border-color: #fff #808080 #808080 #fff; }
-::-webkit-scrollbar-button { background: #c0c0c0; border: 1px solid #808080; width: 16px; height: 16px; }
-
-/* Custom POS Classes */
+/* POS LAYOUT CLASSES */
 .dollar-bar {
   background: #c0c0c0;
   border-bottom: 3px solid #ff0000;
   padding: 2px 8px;
   font-weight: bold;
-}
-
-.nav-tab {
-  padding: 6px 16px;
-  cursor: pointer;
-  font-weight: bold;
-  font-size: 12px;
-  border: 2px solid;
-  border-color: #fff #808080 #808080 #fff;
-  border-bottom: none;
-  background: #a0a0a0;
-  color: #333;
-}
-
-.nav-tab.active {
-  background: #c0c0c0;
-  color: #000;
-  position: relative;
-  top: 2px;
-  border-bottom: 2px solid #c0c0c0;
-}
-
-.product-table thead th {
-  background: #c0c0c0;
-  border: 1px solid #808080;
-  padding: 4px 8px;
-  text-align: left;
-}
-
-.product-table tbody tr.selected {
-  background: #0078d7;
-  color: white;
-}
-
-.total-value {
-  padding: 6px 10px;
-  font-size: 18px;
-  font-weight: bold;
-  text-align: right;
-  border: 2px solid;
-  border-color: #808080 #fff #fff #808080;
-}
-
-.stotal .total-value, .iva .total-value { background: #000; color: #ffff00; }
-.total-bs .total-value { background: #ff6b6b; color: #000; font-size: 24px; }
-.dolar-igtf .total-value { background: #90ee90; color: #000; }
-.divisas .total-value { background: #87ceeb; color: #000; }
-
-.modal-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.4);
-  z-index: 1000;
+  font-size: 13px;
   display: flex;
-  justify-content: center;
   align-items: center;
-}
-
-.modal-window {
-  background: #c0c0c0;
-  border: 2px solid;
-  border-color: #fff #808080 #808080 #fff;
-  min-width: 400px;
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-window.large { min-width: 700px; }
-
-.modal-body { padding: 12px; }
-
-.modal-footer {
-  padding: 8px 12px;
-  border-top: 1px solid #808080;
-  display: flex;
-  justify-content: flex-end;
   gap: 8px;
 }
-
-.cat-badge {
-  padding: 2px 6px;
-  font-size: 10px;
-  font-weight: bold;
-  color: white;
+.header-section {
+  background: #dce8f0;
+  border: 1px solid #808080;
+  margin: 4px;
+  padding: 8px;
 }
-.cat-repuesto { background: #0078d7; }
-.cat-lubricante { background: #e06020; }
-.cat-servicio { background: #40a040; }
-.cat-accesorio { background: #8040c0; }
+.header-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+.header-row label { font-weight: bold; min-width: 70px; font-size: 13px; }
+.vendedor-name { background: #e8e8e8; border: 1px solid #808080; padding: 3px 8px; font-weight: bold; font-size: 13px; }
+.datetime-display { font-weight: bold; color: #008000; font-size: 13px; text-align: right; min-width: 160px; }
 
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+.search-section {
+  background: #dce8f0;
+  border: 1px solid #808080;
+  margin: 4px;
+  padding: 8px;
+  display: flex;
+  align-items: center;
   gap: 12px;
 }
-
-.dash-card {
-  background: #c0c0c0;
-  border: 2px solid;
-  border-color: #fff #808080 #808080 #fff;
-  padding: 12px;
-  text-align: center;
-}
-
-.dash-value { font-size: 24px; font-weight: bold; color: #000080; }
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
+.search-dropdown {
+  position: absolute;
   background: white;
+  border: 2px solid #000080;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 500;
+  min-width: 400px;
+  box-shadow: 2px 2px 6px rgba(0,0,0,0.3);
 }
 
-.data-table th {
-  background: #000080;
-  color: white;
-  padding: 4px 8px;
-  text-align: left;
-}
+.main-content { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+.table-container { flex: 1; overflow: auto; border: 2px solid; border-color: #808080 #fff #fff #808080; margin: 0 4px; background: white; }
+.product-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.product-table thead th { background: #c0c0c0; border: 1px solid #808080; padding: 4px 8px; position: sticky; top: 0; z-index: 1; }
+.product-table tbody tr.selected { background: #0078d7; color: white; }
+.product-table tbody td { padding: 3px 8px; border-bottom: 1px solid #e0e0e0; }
 
-.data-table td {
-  padding: 4px 8px;
-  border-bottom: 1px solid #ddd;
-}
+.right-sidebar { width: 140px; background: #7eb8d8; padding: 6px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; flex-shrink: 0; }
+.sidebar-btn { background: #c0c0c0; border: 2px solid; border-color: #fff #808080 #808080 #fff; padding: 8px 6px; font-size: 11px; cursor: pointer; font-weight: bold; text-align: center; }
+.sidebar-btn.btn-procesar { background: #f0a0a0; border-color: #fff #c06060 #c06060 #fff; font-size: 13px; min-height: 44px; }
+
+.bottom-totals { background: #c0c0c0; border-top: 2px solid #fff; padding: 6px 8px; display: flex; gap: 6px; }
+.total-box { display: flex; flex-direction: column; min-width: 140px; }
+.total-value { padding: 6px 10px; font-size: 18px; font-weight: bold; text-align: right; border: 2px solid; border-color: #808080 #fff #fff #808080; }
+.total-box.stotal .total-value, .total-box.iva .total-value { background: #000; color: #ffff00; }
+.total-box.total-bs .total-value { background: #ff6b6b; color: #000; font-size: 24px; }
+.total-box.dolar-igtf .total-value { background: #90ee90; color: #000; }
+.total-box.divisas .total-value { background: #87ceeb; color: #000; }
+
+.nav-tabs { display: flex; background: #c0c0c0; border-bottom: 2px solid #808080; padding: 0 4px; }
+.nav-tab { padding: 6px 16px; cursor: pointer; font-weight: bold; font-size: 12px; border: 2px solid; border-color: #fff #808080 #808080 #fff; border-bottom: none; background: #a0a0a0; margin-right: 2px; }
+.nav-tab.active { background: #c0c0c0; color: #000; position: relative; top: 2px; border-bottom: 2px solid #c0c0c0; }
+
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 1000; display: none; justify-content: center; align-items: center; }
+.modal-overlay.active { display: flex; }
+.modal-window { background: #c0c0c0; border: 2px solid; border-color: #fff #808080 #808080 #fff; min-width: 400px; display: flex; flex-direction: column; }
+
+.status-bar { background: #c0c0c0; border-top: 2px solid #fff; padding: 3px 8px; font-size: 11px; display: flex; justify-content: space-between; }
+.notification { position: fixed; top: 20px; right: 20px; padding: 12px 20px; background: #40a040; color: white; z-index: 2000; display: none; }
+.notification.show { display: block; }
