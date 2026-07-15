@@ -29,7 +29,6 @@ export function Modals({
   cart, setCart, config, notify, selectedRow 
 }: ModalsProps) {
   
-  // Listas dinámicas con opción a agregar/eliminar
   const [marcas, setMarcas] = useState(['Universal', 'Toyota', 'Ford', 'Mobil', 'Castrol', 'Fram', 'NGK', 'Brembo', 'Gates', 'MAC', 'Rain-X', 'Prestone', 'Valvoline']);
   const [unidades, setUnidades] = useState(['Unidad', 'Kilo', 'Litro', 'Caja', 'Galón', 'Kit', 'Servicio']);
   const [categorias, setCategorias] = useState(['Repuesto', 'Lubricante', 'Servicio', 'Accesorio']);
@@ -68,11 +67,10 @@ export function Modals({
     manejaTallasColores: false,
     manejaPeso: false,
     permiteDescuento: true,
-    kitComponents: []
+    kitComponents: [],
+    capacidadContenido: 0
   });
 
-  // Lógica de recalculo tridireccional: Markup SOBRE VENTA
-  // Formula: Precio = Costo / (1 - Utilidad/100)
   const recalcPrice = (field: string, value: number) => {
     const cost = productForm.costoPromedio || 0;
     const tasa = config.tasa || 1;
@@ -96,6 +94,29 @@ export function Modals({
     }
 
     setProductForm(newForm);
+  };
+
+  const handleMasterNav = (e: React.KeyboardEvent) => {
+    if (['Enter', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
+      const selectors = 'input:not([disabled]), select:not([disabled]), textarea:not([disabled])';
+      const fields = Array.from(e.currentTarget.querySelectorAll(selectors)) as HTMLElement[];
+      const active = document.activeElement as HTMLElement;
+      const idx = fields.indexOf(active);
+
+      if (idx === -1) return;
+
+      if (e.key === 'Enter' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const nextIdx = (idx + 1) % fields.length;
+        fields[nextIdx].focus();
+        if ('select' in fields[nextIdx]) (fields[nextIdx] as any).select?.();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prevIdx = (idx - 1 + fields.length) % fields.length;
+        fields[prevIdx].focus();
+        if ('select' in fields[prevIdx]) (fields[prevIdx] as any).select?.();
+      }
+    }
   };
 
   const handleAddOption = (list: string) => {
@@ -127,10 +148,9 @@ export function Modals({
           <span className="modal-close" onClick={onClose}>✕</span>
         </div>
         
-        <div className="modal-body">
+        <div className="modal-body" onKeyDown={activeModal === 'modalProducto' ? handleMasterNav : undefined}>
           {activeModal === 'modalProducto' && (
             <div className="space-y-6">
-              {/* Sección 1: Identificación */}
               <div className="win-window p-4 space-y-4">
                 <h4 className="text-blue-900 font-bold border-b border-gray-400 pb-1 mb-2">1. Identificación y Datos Básicos</h4>
                 <div className="form-row">
@@ -164,7 +184,6 @@ export function Modals({
                 </div>
               </div>
 
-              {/* Sección 2: Clasificación y Stock */}
               <div className="win-window p-4">
                 <h4 className="text-blue-900 font-bold border-b border-gray-400 pb-1 mb-2">2. Clasificación y Existencias</h4>
                 <div className="form-row">
@@ -189,7 +208,6 @@ export function Modals({
                 </div>
               </div>
 
-              {/* Sección 3: Estructura de Costos y Precios (Markup Tridireccional) */}
               <div className="win-window p-4 bg-gray-100">
                 <h4 className="text-blue-900 font-bold border-b border-gray-400 pb-1 mb-2">3. Costos y Precios (Markup sobre Venta)</h4>
                 <div className="grid grid-cols-3 gap-4 mb-4">
@@ -229,7 +247,6 @@ export function Modals({
                 </div>
               </div>
 
-              {/* Sección 4: Kits y Especiales */}
               <div className="win-window p-4">
                 <h4 className="text-blue-900 font-bold border-b border-gray-400 pb-1 mb-2">4. Kits, Combos y Controles</h4>
                 <div className="grid grid-cols-2 gap-8">
@@ -267,6 +284,13 @@ export function Modals({
                 <button className="btn" onClick={onClose}>Cancelar</button>
                 <button className="btn btn-success" onClick={() => notify('Venta procesada')}>✅ Confirmar</button>
               </div>
+            </div>
+          )}
+
+          {activeModal === 'modalCantidad' && (
+            <div className="form-group">
+              <label>Cantidad:</label>
+              <input type="number" id="qtyInput" defaultValue="1" min="1" step="1" style={{ fontSize: '24px', textAlign: 'center' }} />
             </div>
           )}
         </div>
