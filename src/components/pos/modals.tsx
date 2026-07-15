@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -55,7 +54,9 @@ export function Modals({
     activo: true,
     manejaSeriales: false,
     manejaLotes: false,
+    fechaVencimiento: '',
     manejaTallasColores: false,
+    capacidadContenido: 0,
     manejaPeso: false,
     isKit: false,
     stockPropio: true,
@@ -64,7 +65,6 @@ export function Modals({
     categoria: 'Repuesto'
   });
 
-  // Efecto para limpiar formulario al abrir/cerrar
   useEffect(() => {
     if (activeModal === 'modalProducto') {
       setActiveTab('basicos');
@@ -123,7 +123,6 @@ export function Modals({
         <div className="modal-body">
           {activeModal === 'modalProducto' && (
             <div className="flex flex-col h-full">
-              {/* Tab Navigation */}
               <div className="nav-tabs mb-4">
                 <div className={`nav-tab ${activeTab === 'basicos' ? 'active' : ''}`} onClick={() => setActiveTab('basicos')}>Identificación</div>
                 <div className={`nav-tab ${activeTab === 'clasificacion' ? 'active' : ''}`} onClick={() => setActiveTab('clasificacion')}>Clasificación</div>
@@ -131,31 +130,30 @@ export function Modals({
                 <div className={`nav-tab ${activeTab === 'controles' ? 'active' : ''}`} onClick={() => setActiveTab('controles')}>Controles Especiales</div>
               </div>
 
-              {/* Tab Content: Datos Básicos */}
               {activeTab === 'basicos' && (
                 <div className="space-y-4 animate-in fade-in duration-200">
                   <div className="form-row">
                     <div className="form-group">
                       <label>Código:</label>
-                      <input type="text" value={productForm.codigo} onChange={e => setProductForm({...productForm, codigo: e.target.value})} placeholder="Ej: AUTO-1001" />
+                      <input type="text" value={productForm.codigo || ''} onChange={e => setProductForm({...productForm, codigo: e.target.value})} placeholder="Ej: AUTO-1001" />
                     </div>
                     <div className="form-group">
                       <label>Código de Barras:</label>
-                      <input type="text" value={productForm.barcode} onChange={e => setProductForm({...productForm, barcode: e.target.value})} placeholder="Scan barcode..." />
+                      <input type="text" value={productForm.barcode || ''} onChange={e => setProductForm({...productForm, barcode: e.target.value})} placeholder="Scan barcode..." />
                     </div>
                   </div>
                   <div className="form-group">
                     <label>Descripción Completa:</label>
-                    <input type="text" value={productForm.descripcion} onChange={e => setProductForm({...productForm, descripcion: e.target.value})} placeholder="Nombre comercial del producto" />
+                    <input type="text" value={productForm.descripcion || ''} onChange={e => setProductForm({...productForm, descripcion: e.target.value})} placeholder="Nombre comercial del producto" />
                   </div>
                   <div className="form-row">
                     <div className="form-group">
                       <label>Referencia / OEM:</label>
-                      <input type="text" value={productForm.referencia} onChange={e => setProductForm({...productForm, referencia: e.target.value})} />
+                      <input type="text" value={productForm.referencia || ''} onChange={e => setProductForm({...productForm, referencia: e.target.value})} />
                     </div>
                     <div className="form-group">
                       <label>Marca:</label>
-                      <select value={productForm.marca} onChange={e => setProductForm({...productForm, marca: e.target.value})}>
+                      <select value={productForm.marca || 'Universal'} onChange={e => setProductForm({...productForm, marca: e.target.value})}>
                         <option value="Universal">Universal</option>
                         <option value="Toyota">Toyota</option>
                         <option value="Ford">Ford</option>
@@ -166,7 +164,7 @@ export function Modals({
                   <div className="form-row">
                     <div className="form-group">
                       <label>Unidad de Medida:</label>
-                      <select value={productForm.unidad} onChange={e => setProductForm({...productForm, unidad: e.target.value})}>
+                      <select value={productForm.unidad || 'Unidad'} onChange={e => setProductForm({...productForm, unidad: e.target.value})}>
                         <option value="Unidad">Unidad</option>
                         <option value="Kilo">Kilo</option>
                         <option value="Litro">Litro</option>
@@ -175,7 +173,7 @@ export function Modals({
                     </div>
                     <div className="form-group">
                       <label>Moneda de Transacción:</label>
-                      <select value={productForm.moneda} onChange={e => setProductForm({...productForm, moneda: e.target.value as any})}>
+                      <select value={productForm.moneda || 'base'} onChange={e => setProductForm({...productForm, moneda: e.target.value as any})}>
                         <option value="base">Moneda Base (Bs)</option>
                         <option value="alterna">Divisa Alterna (USD)</option>
                       </select>
@@ -184,13 +182,12 @@ export function Modals({
                 </div>
               )}
 
-              {/* Tab Content: Clasificación */}
               {activeTab === 'clasificacion' && (
                 <div className="space-y-4 animate-in fade-in duration-200">
                   <div className="form-row">
                     <div className="form-group">
                       <label>Departamento:</label>
-                      <select value={productForm.departamento} onChange={e => setProductForm({...productForm, departamento: e.target.value})}>
+                      <select value={productForm.departamento || 'General'} onChange={e => setProductForm({...productForm, departamento: e.target.value})}>
                         <option value="General">General</option>
                         <option value="Repuestos">Repuestos</option>
                         <option value="Lubricantes">Lubricantes</option>
@@ -199,41 +196,40 @@ export function Modals({
                     </div>
                     <div className="form-group">
                       <label>Grupo:</label>
-                      <input type="text" value={productForm.grupo} onChange={e => setProductForm({...productForm, grupo: e.target.value})} />
+                      <input type="text" value={productForm.grupo || ''} onChange={e => setProductForm({...productForm, grupo: e.target.value})} />
                     </div>
                   </div>
                   <div className="form-group">
                     <label>Ubicación Física (Almacén/Estante):</label>
-                    <input type="text" value={productForm.ubicacion} onChange={e => setProductForm({...productForm, ubicacion: e.target.value})} placeholder="Ej: Pasillo 3, Nivel B" />
+                    <input type="text" value={productForm.ubicacion || ''} onChange={e => setProductForm({...productForm, ubicacion: e.target.value})} placeholder="Ej: Pasillo 3, Nivel B" />
                   </div>
                   <div className="form-row">
                     <div className="form-group">
                       <label>Stock Mínimo:</label>
-                      <input type="number" value={productForm.stockMin} onChange={e => setProductForm({...productForm, stockMin: parseInt(e.target.value) || 0})} />
+                      <input type="number" value={productForm.stockMin ?? 5} onChange={e => setProductForm({...productForm, stockMin: parseInt(e.target.value) || 0})} />
                     </div>
                     <div className="form-group">
                       <label>Stock Inicial:</label>
-                      <input type="number" value={productForm.stock} onChange={e => setProductForm({...productForm, stock: parseInt(e.target.value) || 0})} />
+                      <input type="number" value={productForm.stock ?? 0} onChange={e => setProductForm({...productForm, stock: parseInt(e.target.value) || 0})} />
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Tab Content: Costos y Precios */}
               {activeTab === 'precios' && (
                 <div className="space-y-4 animate-in fade-in duration-200">
                   <div className="form-row bg-blue-100 p-3 border border-blue-200 rounded">
                     <div className="form-group">
                       <label>Costo Anterior:</label>
-                      <input type="number" value={productForm.costoAnterior} disabled className="bg-gray-100" />
+                      <input type="number" value={productForm.costoAnterior ?? 0} disabled className="bg-gray-100" />
                     </div>
                     <div className="form-group">
                       <label>Costo Actual:</label>
-                      <input type="number" value={productForm.costoActual} onChange={e => handlePriceRecalc('costoActual', e.target.value)} />
+                      <input type="number" value={productForm.costoActual ?? 0} onChange={e => handlePriceRecalc('costoActual', e.target.value)} />
                     </div>
                     <div className="form-group">
                       <label>Costo Promedio (CPP):</label>
-                      <input type="number" value={productForm.costoPromedio} onChange={e => handlePriceRecalc('costoPromedio', e.target.value)} />
+                      <input type="number" value={productForm.costoPromedio ?? 0} onChange={e => handlePriceRecalc('costoPromedio', e.target.value)} />
                     </div>
                   </div>
 
@@ -243,7 +239,7 @@ export function Modals({
                         <label className="text-blue-800">Porcentaje de Utilidad (%):</label>
                         <input 
                           type="number" 
-                          value={productForm.utilidadPorcentaje} 
+                          value={productForm.utilidadPorcentaje ?? 0} 
                           onChange={e => handlePriceRecalc('utilidadPorcentaje', e.target.value)}
                           className="text-lg font-bold border-blue-400"
                         />
@@ -252,7 +248,7 @@ export function Modals({
                         <label>Precio 1 (Detal):</label>
                         <input 
                           type="number" 
-                          value={productForm.precio1} 
+                          value={productForm.precio1 ?? 0} 
                           onChange={e => handlePriceRecalc('precio1', e.target.value)}
                           className="text-xl font-black text-green-700 border-green-400"
                         />
@@ -261,15 +257,15 @@ export function Modals({
                     <div className="space-y-4">
                       <div className="form-group">
                         <label>Precio 2 (Mayor):</label>
-                        <input type="number" value={productForm.precio2} onChange={e => setProductForm({...productForm, precio2: parseFloat(e.target.value) || 0})} />
+                        <input type="number" value={productForm.precio2 ?? 0} onChange={e => setProductForm({...productForm, precio2: parseFloat(e.target.value) || 0})} />
                       </div>
                       <div className="form-group">
                         <label>Precio 3 (Corporativo):</label>
-                        <input type="number" value={productForm.precio3} onChange={e => setProductForm({...productForm, precio3: parseFloat(e.target.value) || 0})} />
+                        <input type="number" value={productForm.precio3 ?? 0} onChange={e => setProductForm({...productForm, precio3: parseFloat(e.target.value) || 0})} />
                       </div>
                       <div className="form-group">
                         <label>Alícuota IVA (%):</label>
-                        <select value={productForm.ivaAlicuota} onChange={e => setProductForm({...productForm, ivaAlicuota: parseFloat(e.target.value) || 0})}>
+                        <select value={productForm.ivaAlicuota ?? 16} onChange={e => setProductForm({...productForm, ivaAlicuota: parseFloat(e.target.value) || 0})}>
                           <option value="16">General (16%)</option>
                           <option value="8">Reducida (8%)</option>
                           <option value="0">Exento (0%)</option>
@@ -281,24 +277,23 @@ export function Modals({
                 </div>
               )}
 
-              {/* Tab Content: Controles Especiales */}
               {activeTab === 'controles' && (
                 <div className="grid grid-cols-2 gap-4 animate-in fade-in duration-200">
                   <div className="space-y-2 border p-3 bg-white">
-                    <label className="checkbox-label"><input type="checkbox" checked={productForm.permiteDescuento} onChange={e => setProductForm({...productForm, permiteDescuento: e.target.checked})} /> Permite Descuento en POS</label>
-                    <label className="checkbox-label"><input type="checkbox" checked={productForm.activo} onChange={e => setProductForm({...productForm, activo: e.target.checked})} /> Producto Activo</label>
-                    <label className="checkbox-label"><input type="checkbox" checked={productForm.manejaSeriales} onChange={e => setProductForm({...productForm, manejaSeriales: e.target.checked})} /> Manejo de Seriales</label>
-                    <label className="checkbox-label"><input type="checkbox" checked={productForm.manejaPeso} onChange={e => setProductForm({...productForm, manejaPeso: e.target.checked})} /> Manejo de Balanza / Peso</label>
+                    <label className="checkbox-label"><input type="checkbox" checked={productForm.permiteDescuento ?? true} onChange={e => setProductForm({...productForm, permiteDescuento: e.target.checked})} /> Permite Descuento en POS</label>
+                    <label className="checkbox-label"><input type="checkbox" checked={productForm.activo ?? true} onChange={e => setProductForm({...productForm, activo: e.target.checked})} /> Producto Activo</label>
+                    <label className="checkbox-label"><input type="checkbox" checked={productForm.manejaSeriales ?? false} onChange={e => setProductForm({...productForm, manejaSeriales: e.target.checked})} /> Manejo de Seriales</label>
+                    <label className="checkbox-label"><input type="checkbox" checked={productForm.manejaPeso ?? false} onChange={e => setProductForm({...productForm, manejaPeso: e.target.checked})} /> Manejo de Balanza / Peso</label>
                   </div>
                   <div className="space-y-2 border p-3 bg-white">
-                    <label className="checkbox-label"><input type="checkbox" checked={productForm.manejaLotes} onChange={e => setProductForm({...productForm, manejaLotes: e.target.checked})} /> Manejo de Lotes y Vencimiento</label>
+                    <label className="checkbox-label"><input type="checkbox" checked={productForm.manejaLotes ?? false} onChange={e => setProductForm({...productForm, manejaLotes: e.target.checked})} /> Manejo de Lotes y Vencimiento</label>
                     {productForm.manejaLotes && (
-                      <input type="date" className="mt-1" value={productForm.fechaVencimiento} onChange={e => setProductForm({...productForm, fechaVencimiento: e.target.value})} />
+                      <input type="date" className="mt-1" value={productForm.fechaVencimiento || ''} onChange={e => setProductForm({...productForm, fechaVencimiento: e.target.value})} />
                     )}
-                    <label className="checkbox-label"><input type="checkbox" checked={productForm.manejaTallasColores} onChange={e => setProductForm({...productForm, manejaTallasColores: e.target.checked})} /> Manejo de Tallas y Colores</label>
+                    <label className="checkbox-label"><input type="checkbox" checked={productForm.manejaTallasColores ?? false} onChange={e => setProductForm({...productForm, manejaTallasColores: e.target.checked})} /> Manejo de Tallas y Colores</label>
                     <div className="form-group mt-2">
                       <label>Contenido por Empaque:</label>
-                      <input type="number" value={productForm.capacidadContenido} onChange={e => setProductForm({...productForm, capacidadContenido: parseFloat(e.target.value) || 0})} placeholder="Ej: 24 unidades x caja" />
+                      <input type="number" value={productForm.capacidadContenido ?? 0} onChange={e => setProductForm({...productForm, capacidadContenido: parseFloat(e.target.value) || 0})} placeholder="Ej: 24 unidades x caja" />
                     </div>
                   </div>
                 </div>
@@ -306,7 +301,6 @@ export function Modals({
             </div>
           )}
 
-          {/* Otros modales existentes... */}
           {activeModal === 'modalProcesar' && (
             <div className="space-y-4">
               <div id="procesarSummary" className="bg-gray-100 border border-gray-400 p-4">
