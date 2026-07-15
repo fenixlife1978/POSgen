@@ -55,17 +55,6 @@ export default function POSPage() {
     reference: ''
   });
 
-  const [invForm, setInvForm] = useState({
-    productId: 0,
-    quantity: 1,
-    cost: 0,
-    provider: '',
-    invoice: '',
-    obs: '',
-    reason: 'Merma',
-    newStock: 0
-  });
-
   useEffect(() => {
     const interval = setInterval(() => setDateTime(format(new Date(), 'dd/MM/yyyy HH:mm:ss')), 1000);
     return () => clearInterval(interval);
@@ -82,16 +71,6 @@ export default function POSPage() {
     const totalUsd = subtotal + totalIva;
     return { subtotal, totalIva, totalUsd, totalBs: totalUsd * config.tasa, igtfAmount: totalUsd * (config.igtf / 100), totalUnits };
   }, [posCart, config]);
-
-  const inventoryStats = useMemo(() => {
-    let totalValor = 0, stockBajo = 0, agotados = 0;
-    products.forEach(p => {
-      if (p.stock === 0) agotados++;
-      else if (p.stock <= p.stockMin) stockBajo++;
-      totalValor += p.stock * p.costoUsd;
-    });
-    return { total: products.length, valor: totalValor, bajo: stockBajo, agotados };
-  }, [products]);
 
   const addToCart = (product: Product) => {
     if (product.stock <= 0 && product.categoria !== 'Servicio') { alert('Sin stock'); return; }
@@ -114,23 +93,6 @@ export default function POSPage() {
     setConfig(prev => ({ ...prev, nextInvoice: prev.nextInvoice + 1 }));
     setPosCart([]); setPosCliente(''); setPosRif(''); setActiveModal(null);
     alert(`Venta exitosa: ${invoiceNum}`);
-  };
-
-  const saveInventoryEntry = () => {
-    setProducts(prev => prev.map((p, i) => i === Number(invForm.productId) ? { ...p, stock: p.stock + Number(invForm.quantity), costoUsd: Number(invForm.cost) > 0 ? Number(invForm.cost) : p.costoUsd } : p));
-    setActiveModal(null); alert('Entrada registrada');
-  };
-
-  const saveInventoryExit = () => {
-    const p = products[invForm.productId];
-    if (p.stock < invForm.quantity) { alert('Stock insuficiente'); return; }
-    setProducts(prev => prev.map((p, i) => i === Number(invForm.productId) ? { ...p, stock: p.stock - Number(invForm.quantity) } : p));
-    setActiveModal(null); alert('Salida registrada');
-  };
-
-  const saveInventoryAdjust = () => {
-    setProducts(prev => prev.map((p, i) => i === Number(invForm.productId) ? { ...p, stock: Number(invForm.newStock) } : p));
-    setActiveModal(null); alert('Ajuste realizado');
   };
 
   return (
@@ -227,65 +189,7 @@ export default function POSPage() {
           </div>
         )}
 
-        {activeModule === 'inventario' && (
-          <div className="module-panel active block">
-            <h2 className="text-[#000080] mb-3 text-xl font-bold"> Control de Inventario</h2>
-            <div className="toolbar flex gap-1 mb-2 bg-[#c0c0c0] border border-[#808080] p-1">
-              <button className="win-btn px-4" onClick={() => { setInvForm({ ...invForm, productId: 0, quantity: 1, cost: 0 }); setActiveModal('modalEntrada'); }}>📥 Entrada</button>
-              <button className="win-btn px-4" onClick={() => { setInvForm({ ...invForm, productId: 0, quantity: 1 }); setActiveModal('modalSalida'); }}>📤 Salida</button>
-              <button className="win-btn px-4" onClick={() => { setInvForm({ ...invForm, productId: 0, newStock: products[0].stock }); setActiveModal('modalAjuste'); }}>🔧 Ajuste</button>
-              <button className="win-btn px-4" onClick={() => alert('Reporte generado')}>📊 Reporte</button>
-            </div>
-            <div className="dashboard-grid grid grid-cols-4 gap-3 mb-4">
-              <div className="dash-card bg-[#c0c0c0] border-2 border-[#fff #808080 #808080 #fff] p-4 text-center">
-                <div className="dash-value text-2xl font-bold text-[#000080]">{inventoryStats.total}</div>
-                <div className="dash-label text-xs text-[#555]">Total Productos</div>
-              </div>
-              <div className="dash-card bg-[#c0c0c0] border-2 border-[#fff #808080 #808080 #fff] p-4 text-center">
-                <div className="dash-value text-2xl font-bold text-[#000080]">${inventoryStats.valor.toFixed(2)}</div>
-                <div className="dash-label text-xs text-[#555]">Valor Inventario</div>
-              </div>
-              <div className="dash-card bg-[#c0c0c0] border-2 border-[#fff #808080 #808080 #fff] p-4 text-center">
-                <div className="dash-value text-2xl font-bold text-[#000080]">{inventoryStats.bajo}</div>
-                <div className="dash-label text-xs text-[#555]">Stock Bajo</div>
-              </div>
-              <div className="dash-card bg-[#c0c0c0] border-2 border-[#fff #808080 #808080 #fff] p-4 text-center">
-                <div className="dash-value text-2xl font-bold text-[#000080]">{inventoryStats.agotados}</div>
-                <div className="dash-label text-xs text-[#555]">Agotados</div>
-              </div>
-            </div>
-            <div className="table-container bg-white border-2 border-[#808080] overflow-auto">
-              <table className="data-table w-full border-collapse text-xs">
-                <thead>
-                  <tr className="bg-[#000080] text-white">
-                    <th className="p-1 border text-left">Código</th>
-                    <th className="p-1 border text-left">Descripción</th>
-                    <th className="p-1 border text-left">Categoría</th>
-                    <th className="p-1 border text-left">Stock Actual</th>
-                    <th className="p-1 border text-left">Stock Mín</th>
-                    <th className="p-1 border text-left">Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {products.map((p, i) => (
-                    <tr key={i} className="hover:bg-[#e8f0fe] border-b">
-                      <td className="p-1 border">{p.codigo}</td>
-                      <td className="p-1 border">{p.descripcion}</td>
-                      <td className="p-1 border">{p.categoria}</td>
-                      <td className="p-1 border text-center font-bold">{p.stock}</td>
-                      <td className="p-1 border text-center">{p.stockMin}</td>
-                      <td className="p-1 border text-center">
-                        {p.stock === 0 ? '🔴 Agotado' : p.stock <= p.stockMin ? '🟡 Bajo' : '🟢 OK'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {activeModule !== 'pos' && activeModule !== 'inventario' && (
+        {activeModule !== 'pos' && (
           <div className="p-4">
             <h2 className="text-2xl font-bold text-[#000080] mb-4 uppercase">{activeModule}</h2>
             <div className="bg-white border-2 border-[#808080] p-10 text-center">Módulo de {activeModule} en construcción.<br /><button className="win-btn mt-4 px-4 py-2" onClick={() => setActiveModule('pos')}>Volver al POS</button></div>
@@ -328,51 +232,6 @@ export default function POSPage() {
               </div>
             </div>
             <div className="p-3 border-t border-[#808080] flex justify-end gap-2"><button className="win-btn" onClick={() => setActiveModal(null)}>Cancelar</button><button className="win-btn bg-[#40a040] text-white" onClick={confirmSale}>✅ Confirmar Venta</button></div>
-          </div>
-        </div>
-      )}
-
-      {activeModal === 'modalEntrada' && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1000]">
-          <div className="win-window w-[400px]">
-            <div className="win-titlebar"><span>📥 Entrada de Inventario</span><button className="win-btn px-2" onClick={() => setActiveModal(null)}>✕</button></div>
-            <div className="p-4 space-y-3">
-              <div className="form-group"><label className="block font-bold mb-1">Producto:</label><select className="win-input w-full" value={invForm.productId} onChange={e => setInvForm({ ...invForm, productId: Number(e.target.value) })}>{products.map((p, i) => <option key={i} value={i}>{p.codigo} - {p.descripcion}</option>)}</select></div>
-              <div className="flex gap-2">
-                <div className="flex-1"><label className="block font-bold mb-1">Cantidad:</label><input type="number" className="win-input w-full" value={invForm.quantity} onChange={e => setInvForm({ ...invForm, quantity: Number(e.target.value) })} /></div>
-                <div className="flex-1"><label className="block font-bold mb-1">Costo USD:</label><input type="number" className="win-input w-full" value={invForm.cost} onChange={e => setInvForm({ ...invForm, cost: Number(e.target.value) })} /></div>
-              </div>
-              <div><label className="block font-bold mb-1">Proveedor:</label><input type="text" className="win-input w-full" value={invForm.provider} onChange={e => setInvForm({ ...invForm, provider: e.target.value })} /></div>
-            </div>
-            <div className="p-3 border-t border-[#808080] flex justify-end gap-2"><button className="win-btn" onClick={() => setActiveModal(null)}>Cancelar</button><button className="win-btn bg-[#40a040] text-white" onClick={saveInventoryEntry}>✅ Registrar</button></div>
-          </div>
-        </div>
-      )}
-
-      {activeModal === 'modalSalida' && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1000]">
-          <div className="win-window w-[400px]">
-            <div className="win-titlebar"><span>📤 Salida de Inventario</span><button className="win-btn px-2" onClick={() => setActiveModal(null)}>✕</button></div>
-            <div className="p-4 space-y-3">
-              <div className="form-group"><label className="block font-bold mb-1">Producto:</label><select className="win-input w-full" value={invForm.productId} onChange={e => setInvForm({ ...invForm, productId: Number(e.target.value) })}>{products.map((p, i) => <option key={i} value={i}>{p.codigo} - {p.descripcion}</option>)}</select></div>
-              <div className="form-group"><label className="block font-bold mb-1">Cantidad:</label><input type="number" className="win-input w-full" value={invForm.quantity} onChange={e => setInvForm({ ...invForm, quantity: Number(e.target.value) })} /></div>
-              <div className="form-group"><label className="block font-bold mb-1">Motivo:</label><select className="win-input w-full" value={invForm.reason} onChange={e => setInvForm({ ...invForm, reason: e.target.value })}><option>Merma</option><option>Daño</option><option>Devolución</option><option>Ajuste</option></select></div>
-            </div>
-            <div className="p-3 border-t border-[#808080] flex justify-end gap-2"><button className="win-btn" onClick={() => setActiveModal(null)}>Cancelar</button><button className="win-btn bg-[#e0a020] text-black" onClick={saveInventoryExit}>✅ Registrar</button></div>
-          </div>
-        </div>
-      )}
-
-      {activeModal === 'modalAjuste' && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1000]">
-          <div className="win-window w-[400px]">
-            <div className="win-titlebar"><span>🔧 Ajuste de Inventario</span><button className="win-btn px-2" onClick={() => setActiveModal(null)}>✕</button></div>
-            <div className="p-4 space-y-3">
-              <div className="form-group"><label className="block font-bold mb-1">Producto:</label><select className="win-input w-full" value={invForm.productId} onChange={e => setInvForm({ ...invForm, productId: Number(e.target.value), newStock: products[Number(e.target.value)].stock })}>{products.map((p, i) => <option key={i} value={i}>{p.codigo} - {p.descripcion}</option>)}</select></div>
-              <div className="form-group"><label className="block font-bold mb-1">Stock Actual:</label><input type="number" readOnly className="win-input w-full bg-[#e8e8e8]" value={products[invForm.productId]?.stock || 0} /></div>
-              <div className="form-group"><label className="block font-bold mb-1">Nuevo Stock:</label><input type="number" className="win-input w-full" value={invForm.newStock} onChange={e => setInvForm({ ...invForm, newStock: Number(e.target.value) })} /></div>
-            </div>
-            <div className="p-3 border-t border-[#808080] flex justify-end gap-2"><button className="win-btn" onClick={() => setActiveModal(null)}>Cancelar</button><button className="win-btn bg-[#0078d7] text-white" onClick={saveInventoryAdjust}>✅ Ajustar</button></div>
           </div>
         </div>
       )}
