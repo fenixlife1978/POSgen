@@ -353,6 +353,25 @@ export function Modals({ activeModal, onClose }: ModalsProps) {
           </div>
         </div>
       </div>
+
+      {/* Modal: Pago Móvil */}
+      <div className={`modal-overlay ${activeModal === 'modalPagoMovil' ? 'active' : ''}`} onClick={onClose}>
+        <div className="modal-window" onClick={stopPropagation}>
+          <div className="modal-titlebar"><span>📱 Pago Móvil</span><span className="modal-close" onClick={onClose}>✕</span></div>
+          <div className="modal-body">
+            <div className="form-group"><label>Banco:</label><select><option>0102 - Venezuela</option><option>0105 - Mercantil</option><option>0134 - Banesco</option><option>0108 - Provincial</option><option>0175 - Bicentenario</option></select></div>
+            <div className="form-group"><label>Teléfono:</label><input type="text" placeholder="0412-0000000" /></div>
+            <div className="form-group"><label>Cédula:</label><input type="text" placeholder="V-00000000" /></div>
+            <div className="form-group"><label>Monto BS:</label><input type="number" step="0.01" defaultValue="0" /></div>
+            <div className="form-group"><label>Referencia:</label><input type="text" placeholder="Últimos 6 dígitos" /></div>
+            <div className="form-group"><label>Fecha:</label><input type="date" /></div>
+          </div>
+          <div className="modal-footer">
+            <button className="btn" onClick={onClose}>Cancelar</button>
+            <button className="btn btn-success">✅ Registrar</button>
+          </div>
+        </div>
+      </div>
     </>
   );
 }
