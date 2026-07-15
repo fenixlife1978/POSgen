@@ -1,50 +1,59 @@
+
 'use client';
 
 import React from 'react';
+import { Product } from '@/types/pos';
 
 interface InventoryModuleProps {
   active: boolean;
   onOpenModal: (id: string) => void;
+  products: Product[];
 }
 
-export function InventoryModule({ active, onOpenModal }: InventoryModuleProps) {
+export function InventoryModule({ active, onOpenModal, products }: InventoryModuleProps) {
   if (!active) return null;
+
+  const totalValor = products.reduce((s, p) => s + (p.stock * (p.cpp || p.costoUsd)), 0);
 
   return (
     <div id="module-inventario" className="module-panel active">
       <h2 style={{ color: '#000080', marginBottom: '12px' }}> Control de Inventario</h2>
       <div className="toolbar">
-        <button onClick={() => onOpenModal('modalEntrada')}>📥 Entrada</button>
+        <button onClick={() => onOpenModal('modalEntrada')}>📥 Entrada Compra (CPP)</button>
         <button onClick={() => onOpenModal('modalSalida')}>📤 Salida</button>
         <button onClick={() => onOpenModal('modalAjuste')}>🔧 Ajuste</button>
-        <button>📊 Reporte</button>
+        <button>📊 Reporte General</button>
       </div>
       <div className="dashboard-grid" style={{ marginBottom: '12px' }}>
-        <div className="dash-card">
-          <div className="dash-value" id="invTotal">0</div>
-          <div className="dash-label">Total Productos</div>
-        </div>
-        <div className="dash-card">
-          <div className="dash-value" id="invValor">$0</div>
-          <div className="dash-label">Valor Inventario</div>
-        </div>
-        <div className="dash-card">
-          <div className="dash-value" id="invBajo">0</div>
-          <div className="dash-label">Stock Bajo</div>
-        </div>
-        <div className="dash-card">
-          <div className="dash-value" id="invAgotado">0</div>
-          <div className="dash-label">Agotados</div>
-        </div>
+        <div className="dash-card"><div className="dash-value">{products.length}</div><div className="dash-label">Total Productos</div></div>
+        <div className="dash-card"><div className="dash-value">${totalValor.toFixed(2)}</div><div className="dash-label">Valor Inv. (CPP)</div></div>
+        <div className="dash-card"><div className="dash-value">{products.filter(p => p.stock <= p.stockMin && p.stock > 0).length}</div><div className="dash-label">Stock Bajo</div></div>
+        <div className="dash-card"><div className="dash-value">{products.filter(p => p.stock === 0).length}</div><div className="dash-label">Agotados</div></div>
       </div>
       <div className="table-responsive">
-        <table className="data-table" id="inventoryTable">
+        <table className="data-table">
           <thead>
             <tr>
-              <th>Código</th><th>Descripción</th><th>Categoría</th><th>Stock Actual</th><th>Stock Mín</th><th>Última Entrada</th><th>Estado</th>
+              <th>Código</th>
+              <th>Descripción</th>
+              <th>CPP</th>
+              <th>Stock</th>
+              <th>Min</th>
+              <th>Estado</th>
             </tr>
           </thead>
-          <tbody id="inventoryTableBody"></tbody>
+          <tbody>
+            {products.map(p => (
+              <tr key={p.codigo}>
+                <td>{p.codigo}</td>
+                <td>{p.descripcion}</td>
+                <td>${(p.cpp || p.costoUsd).toFixed(2)}</td>
+                <td>{p.stock}</td>
+                <td>{p.stockMin}</td>
+                <td>{p.stock <= p.stockMin ? (p.stock === 0 ? '🔴' : '🟡') : '🟢'}</td>
+              </tr>
+            ))}
+          </tbody>
         </table>
       </div>
     </div>

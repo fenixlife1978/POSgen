@@ -5,17 +5,20 @@ export interface Product {
   categoria: string;
   marca: string;
   modelo: string;
+  departamento: string;
   precioUsd: number;
+  precioBs: number;
   costoUsd: number;
+  margen: number;
   iva: number;
   stock: number;
   stockMin: number;
   unidad: string;
   ubicacion: string;
+  isKit: boolean;
+  stockPropio: boolean;
   activo: boolean;
-  margen?: number;
-  isKit?: boolean;
-  hasOwnStock?: boolean;
+  cpp?: number;
 }
 
 export interface Client {
