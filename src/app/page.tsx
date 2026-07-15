@@ -32,22 +32,13 @@ export default function POSPage() {
   const [dateTime, setDateTime] = useState('');
   const [activeModal, setActiveModal] = useState<string | null>(null);
   
-  // Search States
-  const [prodSearch, setProdSearch] = useState('');
-  const [clientSearch, setClientSearch] = useState('');
-  const [selectedProductIdx, setSelectedProductIdx] = useState(-1);
-  const [selectedClientIdx, setSelectedClientIdx] = useState(-1);
-  const [selectedSaleIdx, setSelectedSaleIdx] = useState(-1);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [editingClient, setEditingClient] = useState<Client | null>(null);
-
-  // Sales Filtering
-  const [ventaDateFrom, setVentaDateFrom] = useState('');
-  const [ventaDateTo, setVentaDateTo] = useState('');
-
-  // Report State
-  const [reportData, setReportData] = useState<any>(null);
-
+  // POS States
+  const [posRif, setPosRif] = useState('');
+  const [posCliente, setPosCliente] = useState('');
+  const [posBusqueda, setPosBusqueda] = useState('');
+  const [searchDropdown, setSearchDropdown] = useState<Product[]>([]);
+  
+  // Config state
   const [config, setConfig] = useState({
     tasa: 724.00,
     igtf: 3,
@@ -61,22 +52,28 @@ export default function POSPage() {
     nextInvoice: 1
   });
 
-  const [posRif, setPosRif] = useState('');
-  const [posCliente, setPosCliente] = useState('');
-  const [posBusqueda, setPosBusqueda] = useState('');
-  const [searchDropdown, setSearchDropdown] = useState<Product[]>([]);
+  // Payment state
   const [paymentState, setPaymentState] = useState({
     receivedUsd: 0,
     receivedBs: 0,
     selectedMethod: 'efectivo_usd',
-    reference: ''
+    reference: '',
+    changeUsd: 0,
+    changeBs: 0
   });
+
+  // Modal temporary states
+  const [tempProduct, setTempProduct] = useState<Partial<Product>>({});
+  const [tempClient, setTempClient] = useState<Partial<Client>>({});
+  const [editId, setEditId] = useState(-1);
+  const [reportData, setReportData] = useState<any>(null);
 
   useEffect(() => {
     const interval = setInterval(() => setDateTime(format(new Date(), 'dd/MM/yyyy HH:mm:ss')), 1000);
     return () => clearInterval(interval);
   }, []);
 
+  // --- POS Logic ---
   const totals = useMemo(() => {
     let subtotal = 0, totalIva = 0, totalUnits = 0;
     posCart.forEach(item => {
@@ -89,44 +86,13 @@ export default function POSPage() {
     return { subtotal, totalIva, totalUsd, totalBs: totalUsd * config.tasa, igtfAmount: totalUsd * (config.igtf / 100), totalUnits };
   }, [posCart, config.tasa, config.igtf]);
 
-  const dashboardStats = useMemo(() => {
-    const today = new Date().toDateString();
-    const todaySales = sales.filter(s => new Date(s.fecha).toDateString() === today && s.estado === 'Completada');
-    const montoHoy = todaySales.reduce((sum, s) => sum + s.totalUsd, 0);
-    const itemsHoy = todaySales.reduce((sum, s) => sum + s.items.reduce((acc, it) => acc + it.cantidad, 0), 0);
-    const clientesHoy = new Set(todaySales.map(s => s.rif)).size;
-    const stockBajo = products.filter(p => p.stock <= p.stockMin && p.activo).length;
-
-    const weeklyData = Array(7).fill(0).map((_, i) => {
-      const d = new Date();
-      d.setDate(d.getDate() - (6 - i));
-      const ds = d.toDateString();
-      const val = sales.filter(s => new Date(s.fecha).toDateString() === ds && s.estado === 'Completada')
-                      .reduce((sum, s) => sum + s.totalUsd, 0);
-      return { day: format(d, 'eee'), value: val };
-    });
-
-    return { todaySalesCount: todaySales.length, montoHoy, itemsHoy, clientesHoy, stockBajo, weeklyData };
-  }, [sales, products]);
-
-  const topProducts = useMemo(() => {
-    const counts: Record<string, { desc: string, cat: string, qty: number, total: number }> = {};
-    sales.filter(s => s.estado === 'Completada').forEach(s => {
-      s.items.forEach(item => {
-        if (!counts[item.codigo]) counts[item.codigo] = { desc: item.descripcion, cat: item.categoria, qty: 0, total: 0 };
-        counts[item.codigo].qty += item.cantidad;
-        counts[item.codigo].total += item.precioUsd * item.cantidad;
-      });
-    });
-    return Object.entries(counts).sort((a, b) => b[1].qty - a[1].qty).slice(0, 10);
-  }, [sales]);
-
-  const inventoryStats = useMemo(() => {
-    const totalVal = products.reduce((sum, p) => sum + (p.stock * p.costoUsd), 0);
-    const bajo = products.filter(p => p.stock <= p.stockMin && p.stock > 0).length;
-    const agotados = products.filter(p => p.stock <= 0).length;
-    return { totalVal, bajo, agotados };
-  }, [products]);
+  const searchProducts = (query: string) => {
+    setPosBusqueda(query);
+    if (!query) { setSearchDropdown([]); return; }
+    const q = query.toLowerCase();
+    const results = products.filter(p => p.activo && (p.codigo.toLowerCase().includes(q) || p.descripcion.toLowerCase().includes(q))).slice(0, 10);
+    setSearchDropdown(results);
+  };
 
   const addToCart = (product: Product) => {
     if (product.stock <= 0 && product.categoria !== 'Servicio') { alert('Sin stock disponible'); return; }
@@ -139,26 +105,51 @@ export default function POSPage() {
     setPosBusqueda(''); setSearchDropdown([]);
   };
 
+  const processSale = () => {
+    if (posCart.length === 0) return;
+    setPaymentState({
+      receivedUsd: totals.totalUsd,
+      receivedBs: 0,
+      selectedMethod: 'efectivo_usd',
+      reference: '',
+      changeUsd: 0,
+      changeBs: 0
+    });
+    setActiveModal('modalProcesar');
+  };
+
+  const calcChange = (receivedUsd: number, receivedBs: number) => {
+    const totalReceivedUsd = receivedUsd + (receivedBs / config.tasa);
+    const changeUsd = totalReceivedUsd - totals.totalUsd;
+    setPaymentState(prev => ({
+      ...prev,
+      receivedUsd,
+      receivedBs,
+      changeUsd: Math.max(0, changeUsd),
+      changeBs: Math.max(0, changeUsd * config.tasa)
+    }));
+  };
+
   const confirmSale = () => {
     const invoiceNum = 'F-' + String(config.nextInvoice).padStart(4, '0');
-    const newSale: Sale = { 
-      numero: invoiceNum, 
-      fecha: new Date().toISOString(), 
-      cliente: posCliente || 'Consumidor Final', 
-      rif: posRif || 'V-00000000-0', 
-      vendedor: config.vendedor, 
-      items: [...posCart], 
-      subtotal: totals.subtotal, 
-      iva: totals.totalIva, 
-      totalUsd: totals.totalUsd, 
-      totalBs: totals.totalBs, 
-      pago: paymentState.selectedMethod, 
-      recibidoUsd: paymentState.receivedUsd, 
-      recibidoBs: paymentState.receivedBs, 
-      cambioUsd: (paymentState.receivedUsd + paymentState.receivedBs/config.tasa) - totals.totalUsd, 
-      referencia: paymentState.reference, 
-      credito: false, 
-      estado: 'Completada' 
+    const newSale: Sale = {
+      numero: invoiceNum,
+      fecha: new Date().toISOString(),
+      cliente: posCliente || 'Consumidor Final',
+      rif: posRif || 'V-00000000-0',
+      vendedor: config.vendedor,
+      items: [...posCart],
+      subtotal: totals.subtotal,
+      iva: totals.totalIva,
+      totalUsd: totals.totalUsd,
+      totalBs: totals.totalBs,
+      pago: paymentState.selectedMethod,
+      recibidoUsd: paymentState.receivedUsd,
+      recibidoBs: paymentState.receivedBs,
+      cambioUsd: paymentState.changeUsd,
+      referencia: paymentState.reference,
+      credito: false,
+      estado: 'Completada'
     };
     setSales(prev => [...prev, newSale]);
     setProducts(prev => prev.map((p, i) => {
@@ -170,19 +161,28 @@ export default function POSPage() {
     alert(`Venta exitosa: ${invoiceNum}`);
   };
 
-  const voidSale = () => {
-    if (selectedSaleIdx < 0) return;
-    const sale = sales[selectedSaleIdx];
-    if (sale.estado === 'Anulada') return;
-    if (confirm('¿Anular esta venta? El stock será devuelto.')) {
-      setSales(prev => prev.map((s, i) => i === selectedSaleIdx ? { ...s, estado: 'Anulada' } : s));
-      setProducts(prev => prev.map(p => {
-        const item = sale.items.find(it => it.codigo === p.codigo);
-        return item && p.categoria !== 'Servicio' ? { ...p, stock: p.stock + item.cantidad } : p;
-      }));
+  // --- CRUD Logic ---
+  const saveProduct = () => {
+    if (!tempProduct.codigo || !tempProduct.descripcion) return;
+    if (editId >= 0) {
+      setProducts(prev => prev.map((p, i) => i === editId ? tempProduct as Product : p));
+    } else {
+      setProducts(prev => [...prev, { ...tempProduct, activo: true } as Product]);
     }
+    setActiveModal(null); setEditId(-1); setTempProduct({});
   };
 
+  const saveClient = () => {
+    if (!tempClient.nombre || !tempClient.rifNum) return;
+    if (editId >= 0) {
+      setClients(prev => prev.map((c, i) => i === editId ? tempClient as Client : c));
+    } else {
+      setClients(prev => [...prev, { ...tempClient, saldo: 0 } as Client]);
+    }
+    setActiveModal(null); setEditId(-1); setTempClient({});
+  };
+
+  // --- Reports & Stats ---
   const generateReport = (type: string) => {
     let content = null;
     if (type === 'ventas') content = { title: 'Reporte de Ventas', val: sales.length, label: 'Ventas Totales' };
@@ -195,50 +195,26 @@ export default function POSPage() {
     setReportData(content);
   };
 
-  const backupData = () => {
-    const data = JSON.stringify({ products, clients, sales, config });
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `autoparts_backup_${format(new Date(), 'yyyy-MM-dd')}.json`;
-    a.click();
-  };
-
-  const restoreData = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const data = JSON.parse(ev.target?.result as string);
-        if (data.products) setProducts(data.products);
-        if (data.clients) setClients(data.clients);
-        if (data.sales) setSales(data.sales);
-        if (data.config) setConfig(data.config);
-        alert('Datos restaurados con éxito');
-      } catch (err) { alert('Error al restaurar'); }
-    };
-    reader.readAsText(file);
-  };
-
-  const clearAllData = () => {
-    if (confirm('¿ESTÁ SEGURO? Se eliminarán todos los registros permanentemente.')) {
-      setProducts(INITIAL_PRODUCTS);
-      setClients(INITIAL_CLIENTS);
-      setSales([]);
-      alert('Sistema reiniciado');
-    }
-  };
+  const dashboardStats = useMemo(() => {
+    const today = new Date().toDateString();
+    const todaySales = sales.filter(s => new Date(s.fecha).toDateString() === today && s.estado === 'Completada');
+    const montoHoy = todaySales.reduce((sum, s) => sum + s.totalUsd, 0);
+    const itemsHoy = todaySales.reduce((sum, s) => sum + s.items.reduce((acc, it) => acc + it.cantidad, 0), 0);
+    const clientsHoy = new Set(todaySales.map(s => s.cliente)).size;
+    const stockBajo = products.filter(p => p.stock <= p.stockMin && p.activo).length;
+    return { todaySales: todaySales.length, montoHoy, itemsHoy, clientsHoy, stockBajo };
+  }, [sales, products]);
 
   return (
     <div className="flex flex-col h-screen bg-[#c0c0c0] select-none text-[13px]">
+      {/* Dollar Bar */}
       <div className="dollar-bar flex items-center gap-4 px-2 py-1">
         <span className="text-[#000080]">💲</span>
         <span>DOLAR: <strong className="font-bold">{config.tasa.toFixed(2)}</strong></span>
         <span className="ml-auto text-[11px] text-[#555]">AutoParts POS v2.0 | Repuestos, Lubricantes y Servicios</span>
       </div>
 
+      {/* Tabs */}
       <div className="flex bg-[#c0c0c0] border-b-2 border-[#808080] px-1">
         {['pos', 'dashboard', 'productos', 'clientes', 'ventas', 'inventario', 'reportes', 'config'].map(m => (
           <div key={m} className={`nav-tab uppercase ${activeModule === m ? 'active' : ''}`} onClick={() => setActiveModule(m)}>{m === 'pos' ? '️ POS Venta' : m}</div>
@@ -246,7 +222,7 @@ export default function POSPage() {
       </div>
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* --- POS MODULE --- */}
+        {/* Module Panels */}
         {activeModule === 'pos' && (
           <div className="flex-1 flex flex-col p-0">
             <div className="bg-[#dce8f0] border border-[#808080] m-1 p-2">
@@ -266,11 +242,7 @@ export default function POSPage() {
             <div className="bg-[#dce8f0] border border-[#808080] m-1 p-2 relative">
               <div className="flex items-center gap-3">
                 <label className="font-bold text-sm">Busqueda:</label>
-                <input type="text" className="win-input w-64 text-sm" placeholder="Código o descripción..." value={posBusqueda} onChange={e => {
-                  setPosBusqueda(e.target.value);
-                  if (e.target.value) setSearchDropdown(products.filter(p => p.activo && (p.codigo.toLowerCase().includes(e.target.value.toLowerCase()) || p.descripcion.toLowerCase().includes(e.target.value.toLowerCase()))).slice(0, 10));
-                  else setSearchDropdown([]);
-                }} />
+                <input type="text" className="win-input w-64" placeholder="Código o descripción..." value={posBusqueda} onChange={e => searchProducts(e.target.value)} />
                 <label className="font-bold text-sm ml-4">Equivalente:</label>
                 <input type="text" readOnly className="win-input w-40 bg-[#e8e8e8]" value={`Bs. ${totals.totalBs.toFixed(2)}`} />
               </div>
@@ -287,7 +259,7 @@ export default function POSPage() {
 
             <div className="flex-1 flex overflow-hidden min-h-0">
               <div className="flex-1 overflow-auto border-2 border-[#808080] m-1 bg-white">
-                <table className="w-full product-table border-collapse">
+                <table className="w-full product-table">
                   <thead className="sticky top-0 z-10">
                     <tr><th className="w-10">#</th><th>Descripcion</th><th className="w-24">Oferta USD</th><th className="w-16">Cant</th><th className="w-28">Precio</th><th className="w-32">Total+Iva</th></tr>
                   </thead>
@@ -310,7 +282,7 @@ export default function POSPage() {
                 <button className="win-btn py-2">Recuperar</button>
                 <button className="win-btn py-2">Dscto</button>
                 <button className="win-btn py-2" onClick={() => { if (selectedRow >= 0) { setPosCart(prev => prev.filter((_, i) => i !== selectedRow)); setSelectedRow(-1); } }}>Delete F4</button>
-                <button className="win-btn py-3 bg-[#f0a0a0] text-sm" onClick={() => { if (posCart.length) { setPaymentState({ receivedUsd: totals.totalUsd, receivedBs: 0, selectedMethod: 'efectivo_usd', reference: '' }); setActiveModal('modalProcesar'); } }}>Procesar F12</button>
+                <button className="win-btn py-3 bg-[#f0a0a0] text-sm" onClick={processSale}>Procesar F12</button>
                 <button className="win-btn py-2" onClick={() => window.location.reload()}>Salir</button>
               </div>
             </div>
@@ -326,186 +298,36 @@ export default function POSPage() {
           </div>
         )}
 
-        {/* --- DASHBOARD MODULE --- */}
+        {/* Dashboard Panel */}
         {activeModule === 'dashboard' && (
           <div className="p-4 overflow-auto">
-            <h2 className="text-2xl font-bold text-[#000080] mb-4 uppercase">Dashboard - Resumen General</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-              <div className="dash-card">
-                <div className="dash-value">{dashboardStats.todaySalesCount}</div>
-                <div className="dash-label">Ventas Hoy</div>
-              </div>
-              <div className="dash-card">
-                <div className="dash-value">${dashboardStats.montoHoy.toFixed(2)}</div>
-                <div className="dash-label">Monto Hoy (USD)</div>
-              </div>
-              <div className="dash-card">
-                <div className="dash-value">{dashboardStats.itemsHoy}</div>
-                <div className="dash-label">Items Vendidos</div>
-              </div>
-              <div className="dash-card">
-                <div className="dash-value">{dashboardStats.clientesHoy}</div>
-                <div className="dash-label">Clientes Atendidos</div>
-              </div>
-              <div className="dash-card">
-                <div className="dash-value text-red-700">{dashboardStats.stockBajo}</div>
-                <div className="dash-label">Stock Bajo</div>
-              </div>
-              <div className="dash-card">
-                <div className="dash-value">{config.tasa.toFixed(2)}</div>
-                <div className="dash-label">Tasa USD/BS</div>
-              </div>
-            </div>
-
-            <div className="bg-white border-2 border-[#808080] p-4 mb-6">
-              <h3 className="text-[#000080] font-bold mb-4">Ventas de la Semana (USD)</h3>
-              <div className="flex items-end gap-2 h-40">
-                {dashboardStats.weeklyData.map((d, i) => {
-                  const maxVal = Math.max(...dashboardStats.weeklyData.map(wd => wd.value), 1);
-                  const height = (d.value / maxVal) * 100;
-                  return (
-                    <div key={i} className="flex-1 flex flex-col items-center group relative">
-                      <div className="w-full bg-[#0078d7] border border-[#000]" style={{ height: `${height}%` }}>
-                        <div className="hidden group-hover:block absolute -top-6 bg-black text-white px-1 text-[10px] whitespace-nowrap">${d.value.toFixed(2)}</div>
-                      </div>
-                      <span className="text-[10px] mt-1 font-bold">{d.day}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
-            <div className="bg-white border-2 border-[#808080] p-4">
-              <h3 className="text-[#000080] font-bold mb-4">Top Productos Más Vendidos</h3>
-              <table className="w-full data-table">
-                <thead><tr><th>#</th><th>Producto</th><th>Categoría</th><th>Cant</th><th>Total USD</th></tr></thead>
-                <tbody>
-                  {topProducts.map(([code, data], i) => (
-                    <tr key={code}><td>{i+1}</td><td>{data.desc}</td><td>{data.cat}</td><td>{data.qty}</td><td>${data.total.toFixed(2)}</td></tr>
-                  ))}
-                </tbody>
-              </table>
+            <h2 className="text-xl font-bold text-[#000080] mb-4">Dashboard - Resumen General</h2>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+              <div className="dash-card"><div className="dash-value">{dashboardStats.todaySales}</div><div className="dash-label">Ventas Hoy</div></div>
+              <div className="dash-card"><div className="dash-value">${dashboardStats.montoHoy.toFixed(2)}</div><div className="dash-label">Monto Hoy (USD)</div></div>
+              <div className="dash-card"><div className="dash-value">{dashboardStats.itemsHoy}</div><div className="dash-label">Items Vendidos</div></div>
+              <div className="dash-card"><div className="dash-value">{dashboardStats.clientsHoy}</div><div className="dash-label">Clientes Atendidos</div></div>
+              <div className="dash-card"><div className="dash-value text-red-700">{dashboardStats.stockBajo}</div><div className="dash-label">Stock Bajo</div></div>
             </div>
           </div>
         )}
 
-        {/* --- PRODUCTOS MODULE --- */}
+        {/* Products Panel */}
         {activeModule === 'productos' && (
-          <div className="p-4 flex flex-col h-full overflow-hidden">
-            <h2 className="text-2xl font-bold text-[#000080] mb-2 uppercase">Gestión de Productos</h2>
-            <div className="toolbar flex gap-1 mb-2 bg-[#c0c0c0] p-1 border border-[#808080]">
-              <button className="win-btn" onClick={() => { setEditingProduct(null); setSelectedProductIdx(-1); setActiveModal('modalProducto'); }}>➕ Nuevo</button>
-              <button className="win-btn" onClick={() => { if(selectedProductIdx >= 0) { setEditingProduct(products[selectedProductIdx]); setActiveModal('modalProducto'); } }}>✏️ Editar</button>
-              <button className="win-btn" onClick={() => { if(selectedProductIdx >= 0 && confirm('Eliminar producto?')) setProducts(prev => prev.filter((_, i) => i !== selectedProductIdx)) }}>🗑️ Eliminar</button>
-              <button className="win-btn" onClick={backupData}>📤 Exportar</button>
-              <button className="win-btn" onClick={() => document.getElementById('importProducts')?.click()}>📥 Importar</button>
-              <input type="file" id="importProducts" className="hidden" accept=".json" onChange={restoreData} />
-              <input type="text" className="win-input ml-auto w-64" placeholder="Buscar producto..." value={prodSearch} onChange={e => setProdSearch(e.target.value)} />
+          <div className="p-4 flex flex-col h-full">
+            <div className="toolbar flex gap-1 mb-2">
+              <button className="win-btn" onClick={() => { setTempProduct({}); setEditId(-1); setActiveModal('modalProducto'); }}>➕ Nuevo</button>
+              <button className="win-btn" onClick={() => { if (selectedRow >= 0) { setTempProduct(products[selectedRow]); setEditId(selectedRow); setActiveModal('modalProducto'); } }}>✏️ Editar</button>
+              <button className="win-btn" onClick={() => { if (selectedRow >= 0) setProducts(prev => prev.filter((_, i) => i !== selectedRow)) }}>🗑️ Eliminar</button>
             </div>
-            <div className="flex-1 overflow-auto border-2 border-[#808080] bg-white">
+            <div className="flex-1 overflow-auto bg-white border-2 border-[#808080]">
               <table className="w-full data-table">
-                <thead className="sticky top-0">
-                  <tr><th>Código</th><th>Descripción</th><th>Cat</th><th>Precio USD</th><th>Precio BS</th><th>Stock</th><th>IVA</th><th>Estado</th></tr>
-                </thead>
-                <tbody>
-                  {products.filter(p => p.codigo.toLowerCase().includes(prodSearch.toLowerCase()) || p.descripcion.toLowerCase().includes(prodSearch.toLowerCase())).map((p, i) => (
-                    <tr key={i} className={selectedProductIdx === products.indexOf(p) ? 'selected' : ''} onClick={() => setSelectedProductIdx(products.indexOf(p))}>
-                      <td>{p.codigo}</td><td>{p.descripcion}</td><td>{p.categoria}</td>
-                      <td className="text-right">${p.precioUsd.toFixed(2)}</td><td className="text-right">Bs {(p.precioUsd * config.tasa).toFixed(2)}</td>
-                      <td className="text-center">{p.stock}</td><td className="text-center">{p.iva}%</td>
-                      <td><span className={`px-2 py-0.5 rounded text-[10px] text-white ${p.stock <= p.stockMin ? 'bg-orange-600' : 'bg-green-600'}`}>{p.stock <= p.stockMin ? 'BAJO' : 'OK'}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* --- CLIENTES MODULE --- */}
-        {activeModule === 'clientes' && (
-          <div className="p-4 flex flex-col h-full overflow-hidden">
-            <h2 className="text-2xl font-bold text-[#000080] mb-2 uppercase">Gestión de Clientes</h2>
-            <div className="toolbar flex gap-1 mb-2 bg-[#c0c0c0] p-1 border border-[#808080]">
-              <button className="win-btn" onClick={() => { setEditingClient(null); setSelectedClientIdx(-1); setActiveModal('modalCliente'); }}>➕ Nuevo</button>
-              <button className="win-btn" onClick={() => { if(selectedClientIdx >= 0) { setEditingClient(clients[selectedClientIdx]); setActiveModal('modalCliente'); } }}>✏️ Editar</button>
-              <button className="win-btn" onClick={() => { if(selectedClientIdx >= 0 && confirm('Eliminar cliente?')) setClients(prev => prev.filter((_, i) => i !== selectedClientIdx)) }}>🗑️ Eliminar</button>
-              <input type="text" className="win-input ml-auto w-64" placeholder="Buscar cliente..." value={clientSearch} onChange={e => setClientSearch(e.target.value)} />
-            </div>
-            <div className="flex-1 overflow-auto border-2 border-[#808080] bg-white">
-              <table className="w-full data-table">
-                <thead className="sticky top-0">
-                  <tr><th>RIF</th><th>Nombre</th><th>Teléfono</th><th>Email</th><th>Saldo USD</th><th>Tipo</th></tr>
-                </thead>
-                <tbody>
-                  {clients.filter(c => c.nombre.toLowerCase().includes(clientSearch.toLowerCase()) || c.rifNum.includes(clientSearch)).map((c, i) => (
-                    <tr key={i} className={selectedClientIdx === clients.indexOf(c) ? 'selected' : ''} onClick={() => setSelectedClientIdx(clients.indexOf(c))}>
-                      <td>{c.tipoRif}-{c.rifNum}</td><td>{c.nombre}</td><td>{c.telefono}</td><td>{c.email}</td><td className="text-right">${c.saldo.toFixed(2)}</td><td>{c.tipo}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* --- VENTAS MODULE --- */}
-        {activeModule === 'ventas' && (
-          <div className="p-4 flex flex-col h-full overflow-hidden">
-            <h2 className="text-2xl font-bold text-[#000080] mb-2 uppercase">🧾 Historial de Ventas</h2>
-            <div className="toolbar flex gap-1 mb-2 bg-[#c0c0c0] p-1 border border-[#808080]">
-              <button className="win-btn">🔍 Filtrar</button>
-              <button className="win-btn" onClick={() => { if(selectedSaleIdx >= 0) alert('Factura: ' + sales[selectedSaleIdx].numero) }}>👁️ Ver Detalle</button>
-              <button className="win-btn" onClick={() => { if(selectedSaleIdx >= 0) window.print() }}>🖨️ Imprimir</button>
-              <button className="win-btn" onClick={voidSale}>❌ Anular</button>
-              <input type="date" className="win-input ml-auto w-40" value={ventaDateFrom} onChange={e => setVentaDateFrom(e.target.value)} />
-              <input type="date" className="win-input w-40" value={ventaDateTo} onChange={e => setVentaDateTo(e.target.value)} />
-            </div>
-            <div className="flex-1 overflow-auto border-2 border-[#808080] bg-white">
-              <table className="w-full data-table">
-                <thead className="sticky top-0">
-                  <tr><th>Factura</th><th>Fecha</th><th>Cliente</th><th>RIF</th><th>Items</th><th>Total USD</th><th>Pago</th><th>Estado</th></tr>
-                </thead>
-                <tbody>
-                  {sales.filter(s => {
-                    if (ventaDateFrom && new Date(s.fecha) < new Date(ventaDateFrom)) return false;
-                    if (ventaDateTo && new Date(s.fecha) > new Date(ventaDateTo)) return false;
-                    return true;
-                  }).map((s, i) => (
-                    <tr key={i} className={selectedSaleIdx === sales.indexOf(s) ? 'selected' : ''} onClick={() => setSelectedSaleIdx(sales.indexOf(s))}>
-                      <td>{s.numero}</td><td>{format(new Date(s.fecha), 'dd/MM/yy HH:mm')}</td><td>{s.cliente}</td><td>{s.rif}</td><td>{s.items.length}</td><td className="text-right">${s.totalUsd.toFixed(2)}</td><td>{s.pago}</td><td>{s.estado}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* --- INVENTARIO MODULE --- */}
-        {activeModule === 'inventario' && (
-          <div className="p-4 flex flex-col h-full overflow-hidden">
-            <h2 className="text-2xl font-bold text-[#000080] mb-2 uppercase"> Control de Inventario</h2>
-            <div className="toolbar flex gap-1 mb-4 bg-[#c0c0c0] p-1 border border-[#808080]">
-              <button className="win-btn">📥 Entrada</button>
-              <button className="win-btn">📤 Salida</button>
-              <button className="win-btn">🔧 Ajuste</button>
-              <button className="win-btn" onClick={() => alert('Reporte generado')}>📊 Reporte</button>
-            </div>
-            <div className="grid grid-cols-4 gap-3 mb-4">
-              <div className="dash-card"><div className="dash-value">{products.length}</div><div className="dash-label">Total Productos</div></div>
-              <div className="dash-card"><div className="dash-value">${inventoryStats.totalVal.toFixed(2)}</div><div className="dash-label">Valor Inventario</div></div>
-              <div className="dash-card"><div className="dash-value text-orange-600">{inventoryStats.bajo}</div><div className="dash-label">Stock Bajo</div></div>
-              <div className="dash-card"><div className="dash-value text-red-700">{inventoryStats.agotados}</div><div className="dash-label">Agotados</div></div>
-            </div>
-            <div className="flex-1 overflow-auto border-2 border-[#808080] bg-white">
-              <table className="w-full data-table">
-                <thead><tr><th>Código</th><th>Descripción</th><th>Cat</th><th>Stock</th><th>Mín</th><th>Estado</th></tr></thead>
+                <thead><tr><th>Código</th><th>Descripción</th><th>Precio USD</th><th>Stock</th><th>Estado</th></tr></thead>
                 <tbody>
                   {products.map((p, i) => (
-                    <tr key={i}>
-                      <td>{p.codigo}</td><td>{p.descripcion}</td><td>{p.categoria}</td><td className="text-center">{p.stock}</td><td className="text-center">{p.stockMin}</td>
-                      <td><span className={`px-2 py-0.5 rounded text-[10px] text-white ${p.stock <= 0 ? 'bg-red-600' : p.stock <= p.stockMin ? 'bg-orange-600' : 'bg-green-600'}`}>{p.stock <= 0 ? 'AGOTADO' : p.stock <= p.stockMin ? 'BAJO' : 'OK'}</span></td>
+                    <tr key={i} className={selectedRow === i ? 'selected' : ''} onClick={() => setSelectedRow(i)}>
+                      <td>{p.codigo}</td><td>{p.descripcion}</td><td className="text-right">${p.precioUsd.toFixed(2)}</td><td className="text-center">{p.stock}</td>
+                      <td className="text-center">{p.stock <= p.stockMin ? 'Bajo' : 'OK'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -514,163 +336,113 @@ export default function POSPage() {
           </div>
         )}
 
-        {/* --- REPORTES MODULE --- */}
-        {activeModule === 'reportes' && (
-          <div className="p-4 flex flex-col h-full overflow-hidden">
-            <h2 className="text-2xl font-bold text-[#000080] mb-4 uppercase">📈 Reportes</h2>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="dash-card cursor-pointer hover:bg-[#dce8f0]" onClick={() => generateReport('ventas')}>
-                <div className="dash-value text-xl">🧾</div><div className="dash-label font-bold">Reporte de Ventas</div>
-              </div>
-              <div className="dash-card cursor-pointer hover:bg-[#dce8f0]" onClick={() => generateReport('inventario')}>
-                <div className="dash-value text-xl">📦</div><div className="dash-label font-bold">Reporte de Inventario</div>
-              </div>
-              <div className="dash-card cursor-pointer hover:bg-[#dce8f0]" onClick={() => generateReport('caja')}>
-                <div className="dash-value text-xl">💰</div><div className="dash-label font-bold">Cierre de Caja</div>
-              </div>
+        {/* Clients Panel */}
+        {activeModule === 'clientes' && (
+          <div className="p-4 flex flex-col h-full">
+            <div className="toolbar flex gap-1 mb-2">
+              <button className="win-btn" onClick={() => { setTempClient({}); setEditId(-1); setActiveModal('modalCliente'); }}>➕ Nuevo</button>
             </div>
-            <div className="bg-white border-2 border-[#808080] p-6 mt-4 flex-1">
-              {reportData ? (
-                <div>
-                  <h3 className="text-[#000080] font-bold text-xl mb-4 border-b pb-2">{reportData.title}</h3>
-                  <div className="dash-card w-64 mx-auto">
-                    <div className="dash-value">{reportData.val}</div>
-                    <div className="dash-label">{reportData.label}</div>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center text-[#888] pt-20">Seleccione un reporte para generar</div>
-              )}
+            <div className="flex-1 overflow-auto bg-white border-2 border-[#808080]">
+              <table className="w-full data-table">
+                <thead><tr><th>RIF</th><th>Nombre</th><th>Teléfono</th><th>Saldo</th></tr></thead>
+                <tbody>
+                  {clients.map((c, i) => (
+                    <tr key={i} className={selectedRow === i ? 'selected' : ''} onClick={() => setSelectedRow(i)}>
+                      <td>{c.tipoRif}-{c.rifNum}</td><td>{c.nombre}</td><td>{c.telefono}</td><td className="text-right">${c.saldo.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
 
-        {/* --- CONFIG MODULE --- */}
+        {/* Config Panel */}
         {activeModule === 'config' && (
-          <div className="p-4 overflow-auto h-full">
-            <h2 className="text-2xl font-bold text-[#000080] mb-4 uppercase">⚙️ Configuración</h2>
+          <div className="p-4 overflow-auto">
+            <h2 className="text-xl font-bold text-[#000080] mb-4">⚙️ Configuración</h2>
             <div className="bg-white border-2 border-[#808080] p-4 mb-4">
-              <h3 className="font-bold border-b-2 border-[#000080] mb-4 pb-1">💱 Tasa de Cambio</h3>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="flex flex-col gap-1"><label>Tasa USD/BS:</label><input type="number" step="0.01" className="win-input" value={config.tasa} onChange={e => setConfig({ ...config, tasa: parseFloat(e.target.value) || 0 })} /></div>
-                <div className="flex flex-col gap-1"><label>IGTF (%):</label><input type="number" step="0.1" className="win-input" value={config.igtf} onChange={e => setConfig({ ...config, igtf: parseFloat(e.target.value) || 0 })} /></div>
-                <div className="flex flex-col gap-1"><label>IVA (%):</label><input type="number" step="0.1" className="win-input" value={config.iva} onChange={e => setConfig({ ...config, iva: parseFloat(e.target.value) || 0 })} /></div>
-              </div>
-            </div>
-            <div className="bg-white border-2 border-[#808080] p-4 mb-4">
-              <h3 className="font-bold border-b-2 border-[#000080] mb-4 pb-1">🏪 Empresa</h3>
+              <h3 className="font-bold border-b mb-2">💱 Tasa de Cambio</h3>
               <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1"><label>RIF:</label><input className="win-input" value={config.rifEmpresa} onChange={e => setConfig({ ...config, rifEmpresa: e.target.value })} /></div>
-                <div className="flex flex-col gap-1"><label>Nombre:</label><input className="win-input" value={config.nombreEmpresa} onChange={e => setConfig({ ...config, nombreEmpresa: e.target.value })} /></div>
+                <div><label className="block">Tasa USD/BS:</label><input type="number" step="0.01" className="win-input w-full" value={config.tasa} onChange={e => setConfig({...config, tasa: parseFloat(e.target.value) || 0})} /></div>
               </div>
-            </div>
-            <div className="bg-white border-2 border-[#808080] p-4">
-              <h3 className="font-bold border-b-2 border-[#000080] mb-4 pb-1">💾 Datos</h3>
-              <div className="flex gap-2">
-                <button className="win-btn bg-green-700 text-white px-6" onClick={backupData}>📤 Exportar</button>
-                <button className="win-btn bg-orange-600 text-white px-6" onClick={() => document.getElementById('fullRestore')?.click()}>📥 Importar</button>
-                <input type="file" id="fullRestore" className="hidden" accept=".json" onChange={restoreData} />
-                <button className="win-btn bg-red-700 text-white px-6 ml-auto" onClick={clearAllData}>🗑️ Limpiar</button>
-              </div>
-            </div>
-            <div className="text-center mt-8">
-              <button className="win-btn bg-blue-800 text-white py-2 px-10 text-lg" onClick={() => alert('Guardado')}>💾 Guardar</button>
             </div>
           </div>
         )}
       </div>
 
-      {/* --- STATUS BAR --- */}
-      <div className="bg-[#c0c0c0] border-t-2 border-white px-2 py-1 flex justify-between text-[11px] h-8 items-center">
-        <span className="border border-[#808080] px-2 text-black bg-[#e0e0e0] h-full flex items-center">Usuario: Admin</span>
-        <span className="border border-[#808080] px-2 text-black bg-[#e0e0e0] h-full flex items-center">Conectado - DB: LocalStorage</span>
-        <span className="border border-[#808080] px-2 text-black bg-[#e0e0e0] h-full flex items-center">Vendedor: {config.vendedor}</span>
-        <span className="border border-[#808080] px-2 text-black bg-[#e0e0e0] h-full flex items-center">Última Venta: {sales.length > 0 ? sales[sales.length-1].numero : '--'}</span>
+      {/* Status Bar */}
+      <div className="status-bar bg-[#c0c0c0] border-t-2 border-white px-2 py-1 flex justify-between text-[11px] h-8 items-center">
+        <span className="border border-[#808080] px-2 bg-[#e0e0e0] h-full flex items-center">Usuario: Admin</span>
+        <span className="border border-[#808080] px-2 bg-[#e0e0e0] h-full flex items-center">Conectado - DB: LocalStorage</span>
+        <span className="border border-[#808080] px-2 bg-[#e0e0e0] h-full flex items-center">Vendedor: {config.vendedor}</span>
+        <span className="border border-[#808080] px-2 bg-[#e0e0e0] h-full flex items-center">Última Venta: {sales.length > 0 ? sales[sales.length-1].numero : '--'}</span>
       </div>
 
-      {/* --- MODALS --- */}
+      {/* Modals */}
       {activeModal === 'modalProcesar' && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1000]">
-          <div className="win-window w-[600px] max-w-full">
-            <div className="win-titlebar"><span>Procesar Venta</span><button className="win-btn py-0 px-2" onClick={() => setActiveModal(null)}>✕</button></div>
-            <div className="p-3">
+        <div className="modal-overlay active">
+          <div className="modal-window large">
+            <div className="modal-titlebar"><span> Procesar Venta</span><span className="modal-close" onClick={() => setActiveModal(null)}>✕</span></div>
+            <div className="modal-body">
               <div className="bg-[#f0f0f0] border border-[#808080] p-3 mb-3">
                 <div className="grid grid-cols-2 gap-2">
                   <div><strong>Cliente:</strong> {posCliente || 'Consumidor Final'}</div>
                   <div><strong>Items:</strong> {posCart.length}</div>
-                  <div><strong>Total USD:</strong> <span className="text-blue-800 font-bold">${totals.totalUsd.toFixed(2)}</span></div>
-                  <div><strong>Total BS:</strong> <span className="text-red-700 font-bold">Bs. {totals.totalBs.toFixed(2)}</span></div>
+                  <div><strong>TOTAL USD:</strong> <span className="text-blue-800 font-bold">${totals.totalUsd.toFixed(2)}</span></div>
+                  <div><strong>TOTAL BS:</strong> <span className="text-red-700 font-bold">Bs. {totals.totalBs.toFixed(2)}</span></div>
                 </div>
               </div>
-              <label className="font-bold mb-2 block text-black">Método de Pago:</label>
-              <div className="grid grid-cols-4 gap-1 mb-4">
+              <div className="payment-methods">
                 {['efectivo_usd', 'efectivo_bs', 'pago_movil', 'transferencia', 'tarjeta', 'zelle', 'mixto', 'credito'].map(m => (
-                  <button key={m} className={`win-btn py-2 capitalize ${paymentState.selectedMethod === m ? 'bg-[#0078d7] text-white' : ''}`} onClick={() => setPaymentState(prev => ({ ...prev, selectedMethod: m }))}>{m.replace('_', ' ')}</button>
+                  <div key={m} className={`payment-method ${paymentState.selectedMethod === m ? 'selected' : ''}`} onClick={() => setPaymentState({...paymentState, selectedMethod: m})}>
+                    <div className="pm-icon">💵</div>{m.replace('_', ' ').toUpperCase()}
+                  </div>
                 ))}
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="block font-bold text-black">Recibido USD:</label>
-                  <input type="number" className="win-input w-full" value={paymentState.receivedUsd} onChange={e => setPaymentState(prev => ({ ...prev, receivedUsd: parseFloat(e.target.value) || 0 }))} />
-                  <label className="block font-bold text-black">Recibido BS:</label>
-                  <input type="number" className="win-input w-full" value={paymentState.receivedBs} onChange={e => setPaymentState(prev => ({ ...prev, receivedBs: parseFloat(e.target.value) || 0 }))} />
-                </div>
-                <div className="space-y-2">
-                  <label className="block font-bold text-black">Cambio USD:</label>
-                  <input type="text" readOnly className="win-input w-full bg-[#90ee90] font-bold" value={((paymentState.receivedUsd + paymentState.receivedBs/config.tasa) - totals.totalUsd).toFixed(2)} />
-                  <label className="block font-bold text-black">Cambio BS:</label>
-                  <input type="text" readOnly className="win-input w-full bg-[#87ceeb] font-bold" value={(((paymentState.receivedUsd + paymentState.receivedBs/config.tasa) - totals.totalUsd) * config.tasa).toFixed(2)} />
-                </div>
+                <div className="form-group"><label>Recibido USD:</label><input type="number" className="win-input" value={paymentState.receivedUsd} onChange={e => calcChange(parseFloat(e.target.value)||0, paymentState.receivedBs)} /></div>
+                <div className="form-group"><label>Recibido BS:</label><input type="number" className="win-input" value={paymentState.receivedBs} onChange={e => calcChange(paymentState.receivedUsd, parseFloat(e.target.value)||0)} /></div>
+                <div className="form-group"><label>Cambio USD:</label><input type="text" readOnly className="win-input bg-[#90ee90]" value={paymentState.changeUsd.toFixed(2)} /></div>
+                <div className="form-group"><label>Cambio BS:</label><input type="text" readOnly className="win-input bg-[#87ceeb]" value={paymentState.changeBs.toFixed(2)} /></div>
               </div>
             </div>
-            <div className="p-3 border-t border-[#808080] flex justify-end gap-2"><button className="win-btn" onClick={() => setActiveModal(null)}>Cancelar</button><button className="win-btn bg-[#40a040] text-white" onClick={confirmSale}>✅ Confirmar Venta</button></div>
+            <div className="modal-footer"><button className="btn" onClick={() => setActiveModal(null)}>Cancelar</button><button className="btn btn-success" onClick={confirmSale}>✅ Confirmar Venta</button></div>
           </div>
         </div>
       )}
 
       {activeModal === 'modalProducto' && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1000]">
-          <div className="win-window w-[600px] max-w-full">
-            <div className="win-titlebar"><span>📦 {editingProduct ? 'Editar' : 'Nuevo'} Producto</span><button className="win-btn py-0 px-2" onClick={() => setActiveModal(null)}>✕</button></div>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const formData = new FormData(e.currentTarget);
-              const newProd: Product = {
-                codigo: formData.get('codigo') as string,
-                descripcion: formData.get('descripcion') as string,
-                categoria: formData.get('categoria') as string,
-                marca: formData.get('marca') as string,
-                modelo: formData.get('modelo') as string,
-                precioUsd: parseFloat(formData.get('precioUsd') as string),
-                costoUsd: parseFloat(formData.get('costoUsd') as string),
-                iva: parseFloat(formData.get('iva') as string),
-                stock: parseInt(formData.get('stock') as string),
-                stockMin: parseInt(formData.get('stockMin') as string),
-                unidad: formData.get('unidad') as string,
-                ubicacion: formData.get('ubicacion') as string,
-                activo: true
-              };
-              if (selectedProductIdx >= 0) setProducts(prev => prev.map((p, i) => i === selectedProductIdx ? newProd : p));
-              else setProducts(prev => [...prev, newProd]);
-              setActiveModal(null);
-            }}>
-              <div className="p-3 space-y-3">
-                <div className="grid grid-cols-2 gap-3 text-black">
-                  <div className="flex flex-col gap-1"><label>Código:</label><input name="codigo" defaultValue={editingProduct?.codigo} className="win-input w-full" required /></div>
-                  <div className="flex flex-col gap-1"><label>Categoría:</label><select name="categoria" defaultValue={editingProduct?.categoria || 'Repuesto'} className="win-input w-full"><option>Repuesto</option><option>Lubricante</option><option>Servicio</option></select></div>
-                </div>
-                <div className="flex flex-col gap-1 text-black"><label>Descripción:</label><input name="descripcion" defaultValue={editingProduct?.descripcion} className="win-input w-full" required /></div>
-                <div className="grid grid-cols-3 gap-3 text-black">
-                  <div className="flex flex-col gap-1"><label>Precio USD:</label><input name="precioUsd" type="number" step="0.01" defaultValue={editingProduct?.precioUsd || 0} className="win-input w-full" /></div>
-                  <div className="flex flex-col gap-1"><label>Costo USD:</label><input name="costoUsd" type="number" step="0.01" defaultValue={editingProduct?.costoUsd || 0} className="win-input w-full" /></div>
-                  <div className="flex flex-col gap-1"><label>IVA %:</label><input name="iva" type="number" defaultValue={editingProduct?.iva || 16} className="win-input w-full" /></div>
-                </div>
+        <div className="modal-overlay active">
+          <div className="modal-window large">
+            <div className="modal-titlebar"><span>📦 Producto</span><span className="modal-close" onClick={() => setActiveModal(null)}>✕</span></div>
+            <div className="modal-body">
+              <div className="form-row">
+                <div className="form-group flex-1"><label>Código:</label><input type="text" className="win-input" value={tempProduct.codigo || ''} onChange={e => setTempProduct({...tempProduct, codigo: e.target.value})} /></div>
+                <div className="form-group flex-1"><label>Categoría:</label><select className="win-input" value={tempProduct.categoria || 'Repuesto'} onChange={e => setTempProduct({...tempProduct, categoria: e.target.value})}><option>Repuesto</option><option>Lubricante</option><option>Servicio</option></select></div>
               </div>
-              <div className="p-3 border-t border-[#808080] flex justify-end gap-2">
-                <button type="button" className="win-btn" onClick={() => setActiveModal(null)}>Cancelar</button>
-                <button type="submit" className="win-btn bg-[#40a040] text-white">💾 Guardar</button>
+              <div className="form-group"><label>Descripción:</label><input type="text" className="win-input" value={tempProduct.descripcion || ''} onChange={e => setTempProduct({...tempProduct, descripcion: e.target.value})} /></div>
+              <div className="form-row">
+                <div className="form-group flex-1"><label>Precio USD:</label><input type="number" className="win-input" value={tempProduct.precioUsd || 0} onChange={e => setTempProduct({...tempProduct, precioUsd: parseFloat(e.target.value)||0})} /></div>
+                <div className="form-group flex-1"><label>Stock:</label><input type="number" className="win-input" value={tempProduct.stock || 0} onChange={e => setTempProduct({...tempProduct, stock: parseInt(e.target.value)||0})} /></div>
               </div>
-            </form>
+            </div>
+            <div className="modal-footer"><button className="btn" onClick={() => setActiveModal(null)}>Cancelar</button><button className="btn btn-success" onClick={saveProduct}>💾 Guardar</button></div>
+          </div>
+        </div>
+      )}
+
+      {activeModal === 'modalCliente' && (
+        <div className="modal-overlay active">
+          <div className="modal-window large">
+            <div className="modal-titlebar"><span> Cliente</span><span className="modal-close" onClick={() => setActiveModal(null)}>✕</span></div>
+            <div className="modal-body">
+              <div className="form-row">
+                <div className="form-group flex-1"><label>RIF:</label><input type="text" className="win-input" value={tempClient.rifNum || ''} onChange={e => setTempClient({...tempClient, rifNum: e.target.value})} /></div>
+                <div className="form-group flex-1"><label>Nombre:</label><input type="text" className="win-input" value={tempClient.nombre || ''} onChange={e => setTempClient({...tempClient, nombre: e.target.value})} /></div>
+              </div>
+            </div>
+            <div className="modal-footer"><button className="btn" onClick={() => setActiveModal(null)}>Cancelar</button><button className="btn btn-success" onClick={saveClient}>💾 Guardar</button></div>
           </div>
         </div>
       )}
