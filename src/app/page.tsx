@@ -5,6 +5,10 @@ import { PosModule } from '@/components/pos/pos-module';
 import { DashboardModule } from '@/components/pos/dashboard-module';
 import { ProductsModule } from '@/components/pos/products-module';
 import { ClientsModule } from '@/components/pos/clients-module';
+import { SalesModule } from '@/components/pos/sales-module';
+import { InventoryModule } from '@/components/pos/inventory-module';
+import { ReportsModule } from '@/components/pos/reports-module';
+import { ConfigModule } from '@/components/pos/config-module';
 
 export default function POSPage() {
   const [activeModule, setActiveModule] = useState('pos');
@@ -41,6 +45,10 @@ export default function POSPage() {
       <DashboardModule active={activeModule === 'dashboard'} />
       <ProductsModule active={activeModule === 'productos'} onOpenModal={openModal} />
       <ClientsModule active={activeModule === 'clientes'} onOpenModal={openModal} />
+      <SalesModule active={activeModule === 'ventas'} />
+      <InventoryModule active={activeModule === 'inventario'} onOpenModal={openModal} />
+      <ReportsModule active={activeModule === 'reportes'} />
+      <ConfigModule active={activeModule === 'config'} onOpenModal={openModal} />
 
       {/* Status Bar */}
       <div className="status-bar">
