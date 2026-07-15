@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -127,3 +128,79 @@ body {
 .total-bs .total-value { background: #ff6b6b; color: #000; font-size: 24px; }
 .dolar-igtf .total-value { background: #90ee90; color: #000; }
 .divisas .total-value { background: #87ceeb; color: #000; }
+
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-window {
+  background: #c0c0c0;
+  border: 2px solid;
+  border-color: #fff #808080 #808080 #fff;
+  min-width: 400px;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-window.large { min-width: 700px; }
+
+.modal-body { padding: 12px; }
+
+.modal-footer {
+  padding: 8px 12px;
+  border-top: 1px solid #808080;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.cat-badge {
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: bold;
+  color: white;
+}
+.cat-repuesto { background: #0078d7; }
+.cat-lubricante { background: #e06020; }
+.cat-servicio { background: #40a040; }
+.cat-accesorio { background: #8040c0; }
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.dash-card {
+  background: #c0c0c0;
+  border: 2px solid;
+  border-color: #fff #808080 #808080 #fff;
+  padding: 12px;
+  text-align: center;
+}
+
+.dash-value { font-size: 24px; font-weight: bold; color: #000080; }
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+
+.data-table th {
+  background: #000080;
+  color: white;
+  padding: 4px 8px;
+  text-align: left;
+}
+
+.data-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid #ddd;
+}

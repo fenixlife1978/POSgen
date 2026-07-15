@@ -1,3 +1,4 @@
+
 export interface Product {
   codigo: string;
   descripcion: string;
@@ -12,6 +13,9 @@ export interface Product {
   unidad: string;
   ubicacion: string;
   activo: boolean;
+  margen?: number;
+  isKit?: boolean;
+  hasOwnStock?: boolean;
 }
 
 export interface Client {
@@ -56,11 +60,13 @@ export interface Sale {
   estado: 'Completada' | 'Anulada';
 }
 
-export interface Presupuesto {
-  numero: string;
-  fecha: string;
-  cliente: string;
-  items: CartItem[];
-  totalUsd: number;
-  estado: string;
+export interface Account {
+  id: string;
+  entidad: string;
+  montoTotal: number;
+  montoPagado: number;
+  fechaEmision: string;
+  estado: 'Pendiente' | 'Parcial' | 'Pagada';
+  referencia: string;
+  tipo: 'CXC' | 'CXP';
 }
