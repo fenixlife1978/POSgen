@@ -13,7 +13,7 @@ interface InventoryModuleProps {
 export function InventoryModule({ active, onOpenModal, products }: InventoryModuleProps) {
   if (!active) return null;
 
-  const totalValor = products.reduce((s, p) => s + (p.stock * (p.cpp || p.costoUsd)), 0);
+  const totalValor = products.reduce((s, p) => s + (p.stock * (p.costoPromedio || 0)), 0);
 
   return (
     <div className="module-panel active">
@@ -48,10 +48,10 @@ export function InventoryModule({ active, onOpenModal, products }: InventoryModu
               <tr key={p.codigo}>
                 <td>{p.codigo}</td>
                 <td>{p.descripcion}</td>
-                <td>${(p.cpp || p.costoUsd).toFixed(2)}</td>
+                <td>${(p.costoPromedio || 0).toFixed(2)}</td>
                 <td>{p.stock}</td>
                 <td>{p.stockMin}</td>
-                <td>${((p.stock) * (p.cpp || p.costoUsd)).toFixed(2)}</td>
+                <td>${((p.stock) * (p.costoPromedio || 0)).toFixed(2)}</td>
                 <td>{p.stock <= p.stockMin ? (p.stock === 0 ? '🔴' : '🟡') : '🟢'}</td>
               </tr>
             ))}
