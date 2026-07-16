@@ -42,8 +42,12 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
       setSearchDropdown([]);
       return;
     }
+    // Búsqueda Inteligente: Inicio de Código o Palabra Clave en Nombre
     const filtered = products.filter(p => 
-      p.activo && (p.codigo.toLowerCase().includes(query.toLowerCase()) || p.nombre.toLowerCase().includes(query.toLowerCase()))
+      p.activo && (
+        p.codigo.toLowerCase().startsWith(query.toLowerCase()) || 
+        p.nombre.toLowerCase().includes(query.toLowerCase())
+      )
     ).slice(0, 15);
     setSearchDropdown(filtered);
   };

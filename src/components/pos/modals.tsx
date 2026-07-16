@@ -70,6 +70,8 @@ export function Modals({
     proveedor: '', nroFactura: '', tasa: config.tasa, tipo: 'Contado' as 'Contado' | 'Credito' | 'Mixto', 
     diasCredito: 0, pagoContadoUsd: 0, pagoContadoBs: 0, items: [] as any[]
   });
+  const [purchaseSearch, setPurchaseSearch] = useState('');
+  const [purchaseResults, setPurchaseResults] = useState<Product[]>([]);
 
   // --- PROCESAR PAGO STATE ---
   const [paymentState, setPaymentState] = useState({
@@ -132,7 +134,7 @@ export function Modals({
       notify('❌ No puedes agregar el producto a sí mismo', 'error');
       return;
     }
-    const idx = products.findIndex(item => item.codigo === p.codigo);
+    const idx = products.indexOf(p);
     const exists = productForm.kitComponents.find(c => c.codigo === p.codigo);
     if (exists) return;
 
@@ -142,6 +144,101 @@ export function Modals({
     });
     setCompSearch('');
     setCompResults([]);
+  };
+
+  const handlePurchaseSearch = (query: string) => {
+    setPurchaseSearch(query);
+    if (query.length < 1) {
+      setPurchaseResults([]);
+      return;
+    }
+    const filtered = products.filter(p => 
+      p.codigo.toLowerCase().startsWith(query.toLowerCase()) || 
+      p.nombre.toLowerCase().includes(query.toLowerCase())
+    ).slice(0, 10);
+    setPurchaseResults(filtered);
+  };
+
+  const addPurchaseItem = (p: Product) => {
+    const exists = purchaseForm.items.find(it => it.codigo === p.codigo);
+    if (exists) {
+      notify('⚠️ El producto ya está en la lista', 'warning');
+      return;
+    }
+    setPurchaseForm({
+      ...purchaseForm,
+      items: [...purchaseForm.items, {
+        codigo: p.codigo,
+        nombre: p.nombre,
+        cantidad: 1,
+        costo: p.costoActual || p.costoPromedio,
+        productIndex: products.indexOf(p)
+      }]
+    });
+    setPurchaseSearch('');
+    setPurchaseResults([]);
+  };
+
+  const removePurchaseItem = (idx: number) => {
+    const newItems = [...purchaseForm.items];
+    newItems.splice(idx, 1);
+    setPurchaseForm({ ...purchaseForm, items: newItems });
+  };
+
+  const updatePurchaseItem = (idx: number, field: string, value: any) => {
+    const newItems = [...purchaseForm.items];
+    newItems[idx] = { ...newItems[idx], [field]: value };
+    setPurchaseForm({ ...purchaseForm, items: newItems });
+  };
+
+  const processPurchase = () => {
+    if (purchaseForm.items.length === 0) {
+      notify('❌ Debe agregar al menos un producto', 'error');
+      return;
+    }
+    
+    const updatedProducts = [...products];
+    const newMovements: InventoryMovement[] = [...movements];
+
+    purchaseForm.items.forEach(item => {
+      const p = updatedProducts[item.productIndex];
+      const stockAnterior = p.stock;
+      const cppAnterior = p.costoPromedio;
+      
+      // Recálculo de CPP Financiero
+      const nuevoCpp = ((stockAnterior * cppAnterior) + (item.cantidad * item.costo)) / (stockAnterior + item.cantidad);
+      
+      p.costoAnterior = p.costoActual;
+      p.costoActual = item.costo;
+      p.costoPromedio = Math.round(nuevoCpp * 100) / 100;
+      p.stock += item.cantidad;
+
+      // Actualización de precio si se mantiene el margen
+      p.precio1 = p.utilidadPorcentaje >= 100 ? p.costoPromedio : Math.round((p.costoPromedio / (1 - p.utilidadPorcentaje/100)) * 100) / 100;
+
+      newMovements.push({
+        id: uuidv4(),
+        fecha: new Date().toISOString(),
+        codigoProducto: p.codigo,
+        tipo: 'ENTRADA',
+        cantidad: item.cantidad,
+        stockPrevio: stockAnterior,
+        stockNuevo: p.stock,
+        costo: item.costo,
+        referencia: purchaseForm.nroFactura || 'COMPRA',
+        comentario: `Entrada por compra a ${purchaseForm.proveedor || 'Proveedor'}`,
+        usuario: config.vendedor
+      });
+    });
+
+    setProducts(updatedProducts);
+    setMovements(newMovements);
+    setPurchaseForm({
+      proveedor: '', nroFactura: '', tasa: config.tasa, tipo: 'Contado', 
+      diasCredito: 0, pagoContadoUsd: 0, pagoContadoBs: 0, items: []
+    });
+    notify('✅ Recepción de mercancía procesada correctamente');
+    onClose();
   };
 
   const getCartTotal = () => {
@@ -157,10 +254,8 @@ export function Modals({
 
   const addPayment = () => {
     if (paymentState.amount <= 0) return;
-    const totalUsdToPay = getCartTotal();
     let usd = 0; let bs = 0;
     
-    // Identificar si el método es en USD (Efectivo USD o Zelle)
     const isUsdMethod = paymentState.method === 'Efectivo USD' || paymentState.method === 'Zelle';
     
     if (isUsdMethod) {
@@ -262,6 +357,8 @@ export function Modals({
       if (field === 'add') addPayment();
     }
   };
+
+  const purchaseTotals = purchaseForm.items.reduce((acc, it) => acc + (it.cantidad * it.costo), 0);
 
   if (!activeModal && !lastSale) return null;
 
@@ -549,8 +646,24 @@ export function Modals({
 
               <div className="toolbar bg-blue-100 p-4 border border-blue-300">
                 <button className="btn btn-success" onClick={() => onOpenModal('modalProducto')}>➕ NUEVA FICHA</button>
-                <div className="flex-1 px-4">
-                  <input type="text" placeholder="🔍 Buscar producto por código o nombre..." className="win-input w-full" />
+                <div className="flex-1 px-4 relative">
+                  <input 
+                    type="text" 
+                    placeholder="🔍 Buscar producto por código o nombre..." 
+                    className="win-input w-full" 
+                    value={purchaseSearch}
+                    onChange={(e) => handlePurchaseSearch(e.target.value)}
+                  />
+                  {purchaseResults.length > 0 && (
+                    <div className="absolute top-full left-4 right-4 bg-white border-2 border-blue-800 z-50 shadow-xl max-h-48 overflow-y-auto">
+                      {purchaseResults.map(p => (
+                        <div key={p.codigo} className="p-2 hover:bg-blue-100 cursor-pointer text-xs flex justify-between border-b" onClick={() => addPurchaseItem(p)}>
+                          <span><strong>{p.codigo}</strong> - {p.nombre}</span>
+                          <span className="font-bold">Stock: {p.stock}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <button className="btn btn-primary">➕ AÑADIR ITEM</button>
               </div>
@@ -568,10 +681,16 @@ export function Modals({
                         <tr key={idx}>
                           <td>{it.codigo}</td>
                           <td>{it.nombre}</td>
-                          <td>{it.cantidad}</td>
-                          <td>${it.costo.toFixed(2)}</td>
-                          <td>${(it.cantidad * it.costo).toFixed(2)}</td>
-                          <td className="text-center">❌</td>
+                          <td>
+                            <input type="number" value={it.cantidad} onChange={e => updatePurchaseItem(idx, 'cantidad', parseInt(e.target.value) || 1)} className="win-input w-16 text-center" />
+                          </td>
+                          <td>
+                            <input type="number" value={it.costo} onChange={e => updatePurchaseItem(idx, 'costo', parseFloat(e.target.value) || 0)} className="win-input w-24 text-right" />
+                          </td>
+                          <td className="text-right">${(it.cantidad * it.costo).toFixed(2)}</td>
+                          <td className="text-center">
+                            <button className="text-red-600" onClick={() => removePurchaseItem(idx)}>❌</button>
+                          </td>
                         </tr>
                       ))
                     )}
@@ -582,25 +701,25 @@ export function Modals({
               <div className="grid grid-cols-4 gap-4">
                 <div className="win-window p-3 bg-black text-green-400 text-center">
                   <div className="text-[10px] font-bold">TOTAL FACTURA USD</div>
-                  <div className="text-xl font-black">$0.00</div>
+                  <div className="text-xl font-black">${purchaseTotals.toFixed(2)}</div>
                 </div>
                 <div className="win-window p-3 bg-black text-yellow-400 text-center">
                   <div className="text-[10px] font-bold">EQUIV. BS.</div>
-                  <div className="text-xl font-black">Bs 0.00</div>
+                  <div className="text-xl font-black">Bs {(purchaseTotals * config.tasa).toFixed(2)}</div>
                 </div>
                 <div className="win-window p-3 bg-green-900 text-white text-center">
                   <div className="text-[10px] font-bold">PAGADO USD</div>
-                  <div className="text-xl font-black">$0.00</div>
+                  <div className="text-xl font-black">${(purchaseForm.tipo === 'Contado' ? purchaseTotals : purchaseForm.pagoContadoUsd).toFixed(2)}</div>
                 </div>
                 <div className="win-window p-3 bg-red-900 text-white text-center">
                   <div className="text-[10px] font-bold">PENDIENTE USD</div>
-                  <div className="text-xl font-black">$0.00</div>
+                  <div className="text-xl font-black">${(purchaseTotals - (purchaseForm.tipo === 'Contado' ? purchaseTotals : purchaseForm.pagoContadoUsd)).toFixed(2)}</div>
                 </div>
               </div>
             </div>
             <div className="modal-footer">
               <button className="btn" onClick={onClose}>Cancelar</button>
-              <button className="btn btn-primary">💾 PROCESAR ENTRADA</button>
+              <button className="btn btn-primary" onClick={processPurchase}>💾 PROCESAR ENTRADA</button>
             </div>
           </div>
         )}
@@ -684,7 +803,7 @@ export function Modals({
               </div>
 
               <div className="win-window p-3 bg-gray-200 border-none">
-                <div className="flex justify-between font-bold text-xs">
+                <div className="flex justify-between font-bold text-xs text-black">
                   <span>TOTAL PAGADO:</span>
                   <span>${paymentState.totalPaidUsd.toFixed(2)}</span>
                 </div>
