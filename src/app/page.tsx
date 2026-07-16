@@ -13,7 +13,7 @@ import { ConfigModule } from '@/components/pos/config-module';
 import { AccountsModule } from '@/components/pos/accounts-module';
 import { UsersModule } from '@/components/pos/users-module';
 import { Modals } from '@/components/pos/modals';
-import { Product, Client, Sale, Account, CartItem, Presupuesto, User } from '@/types/pos';
+import { Product, Client, Sale, Account, CartItem, Presupuesto, User, InventoryMovement } from '@/types/pos';
 
 export default function POSPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -28,18 +28,19 @@ export default function POSPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [posCart, setPosCart] = useState<CartItem[]>([]);
   const [selectedRow, setSelectedRow] = useState(-1);
   const [editingId, setEditingId] = useState<string | number | null>(null);
 
   const [config, setConfig] = useState({
-    tasa: 724.00,
+    tasa: 36.50, // Ejemplo Tasa BCV
     igtf: 3,
     iva: 16,
     rifEmpresa: 'J-12345678-9',
-    nombreEmpresa: 'AutoParts C.A.',
-    direccion: 'Av. Principal, Local 5',
-    telefono: '0212-5551234',
+    nombreEmpresa: 'SISTEMA POS REAL',
+    direccion: 'Av. Principal',
+    telefono: '0412-0000000',
     vendedor: 'ADMIN',
     vVendedores: ['ADMIN'],
     nextInvoice: 1,
@@ -57,20 +58,18 @@ export default function POSPage() {
       if (data.presupuestos) setPresupuestos(data.presupuestos);
       if (data.users) setUsers(data.users);
       if (data.config) setConfig(data.config);
+      if (data.movements) setMovements(data.movements);
     } else {
       setUsers([
         { id: '1', username: 'Admin', password: '123', name: 'Administrador', role: 'Administrador', active: true }
-      ]);
-      setClients([
-        { tipoRif: 'V', rifNum: '00000000-0', nombre: 'Consumidor Final', telefono: '', email: '', direccion: '', tipo: 'Regular', credito: 0, saldo: 0 }
       ]);
     }
   }, []);
 
   useEffect(() => {
-    const data = { products, clients, sales, accounts, presupuestos, users, config };
+    const data = { products, clients, sales, accounts, presupuestos, users, config, movements };
     localStorage.setItem('autoparts_pos_db_final', JSON.stringify(data));
-  }, [products, clients, sales, accounts, presupuestos, users, config]);
+  }, [products, clients, sales, accounts, presupuestos, users, config, movements]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,7 +104,7 @@ export default function POSPage() {
     return (
       <div className="login-screen">
         <div className="login-box">
-          <div className="login-title">Acceso al Sistema - MarketerPro POS</div>
+          <div className="login-title">Acceso al Sistema - POS Pro</div>
           <form onSubmit={handleLogin}>
             <div className="form-group">
               <label>Usuario:</label>
@@ -129,8 +128,8 @@ export default function POSPage() {
     <div id="mainApp">
       <div id="notification" className="notification"></div>
       <div className="dollar-bar">
-        <span>💲 DOLAR: <strong>{config.tasa.toFixed(2)}</strong></span>
-        <span style={{ marginLeft: 'auto', fontSize: '11px' }}>{config.nombreEmpresa} | Sistema de Punto de Venta e Inventario</span>
+        <span>💲 TASA BCV: <strong>{config.tasa.toFixed(2)}</strong></span>
+        <span style={{ marginLeft: 'auto', fontSize: '11px' }}>{config.nombreEmpresa} | Sistema de Gestión Integral</span>
       </div>
       <div className="nav-tabs">
         {[
@@ -156,7 +155,7 @@ export default function POSPage() {
         <ProductsModule active={activeModule === 'productos'} onOpenModal={openModal} products={products} setProducts={setProducts} tasa={config.tasa} notify={notify} />
         <ClientsModule active={activeModule === 'clientes'} onOpenModal={openModal} clients={clients} setClients={setClients} notify={notify} />
         <SalesModule active={activeModule === 'ventas'} sales={sales} setSales={setSales} products={products} setProducts={setProducts} notify={notify} />
-        <InventoryModule active={activeModule === 'inventario'} onOpenModal={openModal} products={products} />
+        <InventoryModule active={activeModule === 'inventario'} onOpenModal={openModal} products={products} movements={movements} />
         <ReportsModule active={activeModule === 'reportes'} sales={sales} products={products} clients={clients} config={config} />
         <AccountsModule active={activeModule === 'cuentas'} accounts={accounts} />
         <UsersModule active={activeModule === 'usuarios'} users={users} setUsers={setUsers} onOpenModal={openModal} notify={notify} />
@@ -174,6 +173,7 @@ export default function POSPage() {
         accounts={accounts} setAccounts={setAccounts} presupuestos={setPresupuestos} 
         cart={posCart} setCart={setPosCart} config={config} setConfig={setConfig} notify={notify} 
         selectedRow={selectedRow} editingId={editingId} users={users} setUsers={setUsers}
+        movements={movements} setMovements={setMovements}
       />
     </div>
   );

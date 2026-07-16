@@ -1,3 +1,4 @@
+
 export interface Product {
   codigo: string;
   descripcion: string;
@@ -112,4 +113,20 @@ export interface User {
   name: string;
   role: 'Administrador' | 'Supervisor' | 'Cajero';
   active: boolean;
+}
+
+export type MovementType = 'ENTRADA' | 'SALIDA' | 'AJUSTE' | 'VENTA' | 'ANULACION';
+
+export interface InventoryMovement {
+  id: string;
+  fecha: string;
+  codigoProducto: string;
+  tipo: MovementType;
+  cantidad: number;
+  stockPrevio: number;
+  stockNuevo: number;
+  costo: number;
+  referencia: string; // Nro Factura, Nro Venta, etc
+  comentario: string;
+  usuario: string;
 }

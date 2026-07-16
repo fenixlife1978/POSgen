@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -19,7 +20,7 @@ interface PosModuleProps {
 export function PosModule({ active, onOpenModal, products, clients, cart, setCart, config, notify, selectedRow, setSelectedRow }: PosModuleProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchDropdown, setSearchDropdown] = useState<Product[]>([]);
-  const [clientInfo, setClientInfo] = useState({ name: '', rif: '', saldo: 0 });
+  const [clientInfo, setClientInfo] = useState({ name: 'Consumidor Final', rif: 'V-00000000-0', saldo: 0 });
   const [dateTime, setDateTime] = useState('');
 
   useEffect(() => {
@@ -42,7 +43,7 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
       return;
     }
     const filtered = products.filter(p => 
-      p.activo && (p.codigo.toLowerCase().includes(query.toLowerCase()) || p.descripcion.toLowerCase().includes(query.toLowerCase()))
+      p.activo && (p.codigo.toLowerCase().includes(query.toLowerCase()) || p.nombre.toLowerCase().includes(query.toLowerCase()))
     ).slice(0, 15);
     setSearchDropdown(filtered);
   };
@@ -55,8 +56,8 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
       setCart([...cart, {
         productIndex: products.indexOf(product),
         codigo: product.codigo,
-        descripcion: product.descripcion,
-        precioUsd: product.precioUsd,
+        descripcion: product.nombre,
+        precioUsd: product.precio1,
         iva: product.iva,
         cantidad: 1,
         categoria: product.categoria
@@ -98,11 +99,7 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
           <label style={{display:'flex', alignItems:'center', gap:'4px'}}><input type="checkbox" /> Crédito</label>
           <label style={{fontWeight:'bold', marginLeft:'10px'}}>N/Vendedor:</label>
           <span className="vendedor-name">{config.vendedor}</span>
-          <div style={{marginLeft:'auto', display:'flex', gap:'4px'}}>
-            <button className="btn" style={{padding:'2px 8px', fontSize:'11px'}} onClick={() => onOpenModal('modalRecuperar')}>Recuperar Documento</button>
-            <button className="btn" style={{padding:'2px 8px', fontSize:'11px'}} onClick={() => onOpenModal('modalDescuento')}>Aplicar Dscto</button>
-          </div>
-          <div style={{color:'#008000', fontWeight:'bold', marginLeft:'10px'}}>{dateTime}</div>
+          <div style={{color:'#008000', fontWeight:'bold', marginLeft:'auto'}}>{dateTime}</div>
         </div>
         <div className="header-row">
           <label style={{fontWeight:'bold'}}>Cliente:</label>
@@ -122,14 +119,13 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
           placeholder="Código, nombre o descripción..." 
         />
         <label style={{fontWeight:'bold', marginLeft:'10px'}}>Equivalente:</label>
-        <input type="text" style={{width:'150px', background:'#eee', fontWeight:'bold'}} value={formatBS(totals.totalBs)} readOnly />
-        <button className="btn" style={{padding:'2px 8px'}}>📋 Copiar</button>
+        <input type="text" style={{width:'150px', background:'#eee', fontWeight:'bold', textAlign: 'right'}} value={formatBS(totals.totalBs)} readOnly />
         
         {searchDropdown.length > 0 && (
           <div className="search-dropdown active">
             {searchDropdown.map(p => (
               <div key={p.codigo} className="search-dropdown-item" onClick={() => addToCart(p)}>
-                <strong>{p.codigo}</strong> - {p.descripcion} | <span style={{ color: '#000080' }}>{formatUSD(p.precioUsd)}</span> | Stock: {p.stock}
+                <strong>{p.codigo}</strong> - {p.nombre} | <span style={{ color: '#000080' }}>{formatUSD(p.precio1)}</span> | Stock: {p.stock}
               </div>
             ))}
           </div>
@@ -143,9 +139,9 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
               <tr>
                 <th style={{ width: '30px' }}>#</th>
                 <th>Descripcion</th>
-                <th style={{ width: '80px', textAlign:'right' }}>Oferta USD</th>
+                <th style={{ width: '80px', textAlign:'right' }}>Precio USD</th>
                 <th style={{ width: '50px', textAlign:'center' }}>Cant</th>
-                <th style={{ width: '100px', textAlign:'right' }}>Precio</th>
+                <th style={{ width: '100px', textAlign:'right' }}>Subtotal</th>
                 <th style={{ width: '100px', textAlign:'right' }}>Total+Iva</th>
               </tr>
             </thead>
@@ -168,52 +164,35 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
         </div>
 
         <div className="right-sidebar">
-          <button className="sidebar-btn" onClick={() => onOpenModal('modalRecuperar')}>Recuperar Documento</button>
-          <button className="sidebar-btn" onClick={() => onOpenModal('modalDescuento')}>Aplicar Dscto</button>
-          <button className="sidebar-btn" onClick={() => setCart(cart.filter((_, idx) => idx !== selectedRow))}>Delete F4</button>
-          <button className="sidebar-btn" onClick={() => onOpenModal('modalItem')}>Item</button>
-          <button className="sidebar-btn">P. Activo</button>
-          <button className="sidebar-btn" onClick={() => onOpenModal('modalLocalizar')}>Localizar</button>
-          <button className="sidebar-btn btn-procesar" onClick={() => onOpenModal('modalProcesar')}>Procesar F12</button>
-          <button className="sidebar-btn" onClick={() => onOpenModal('modalCompras')}>Compras</button>
-          <button className="sidebar-btn" onClick={() => onOpenModal('modalDatos')}>Datos</button>
-          <button className="sidebar-btn" onClick={() => onOpenModal('modalRif')}>Rif</button>
-          <button className="sidebar-btn" onClick={() => onOpenModal('modalBuscarCliente')}>Buscar cliente</button>
-          <button className="sidebar-btn" onClick={() => onOpenModal('modalPresupuesto')}>Presupuesto</button>
-          <button className="sidebar-btn" onClick={() => onOpenModal('modalCantidad')}>Cantidad</button>
-          <button className="sidebar-btn" onClick={() => onOpenModal('modalAvanzada')}>Avanzada F6</button>
+          <button className="sidebar-btn" onClick={() => onOpenModal('modalProcesar')}>Procesar F12</button>
+          <button className="sidebar-btn" onClick={() => setCart(cart.filter((_, idx) => idx !== selectedRow))}>Eliminar Item</button>
           <button className="sidebar-btn" onClick={() => onOpenModal('modalConsultar')}>Consultar F2</button>
-          <button className="sidebar-btn">Facturar Reverso</button>
-          <button className="sidebar-btn" onClick={() => onOpenModal('modalVPOS')}>Opciones VPOS</button>
-          <button className="sidebar-btn" onClick={() => onOpenModal('modalPagoMovil')}>Cambio Pago Movil</button>
-          <button className="sidebar-btn">Salir</button>
+          <button className="sidebar-btn" onClick={() => onOpenModal('modalCliente')}>Nuevo Cliente</button>
+          <button className="sidebar-btn" onClick={() => onOpenModal('modalProducto')}>Nuevo Item</button>
+          <button className="sidebar-btn" style={{ marginTop: 'auto', background: '#f0a0a0' }}>SALIR</button>
         </div>
       </div>
 
       <div className="bottom-totals">
         <div className="total-box stotal">
-          <span className="total-label">S/total:</span>
-          <div className="total-value">{totals.subtotal.toFixed(2)}</div>
+          <span className="total-label">Subtotal:</span>
+          <div className="total-value">${totals.subtotal.toFixed(2)}</div>
         </div>
         <div className="total-box iva">
-          <span className="total-label">Iva:</span>
-          <div className="total-value">{totals.totalIva.toFixed(2)}</div>
+          <span className="total-label">IVA (16%):</span>
+          <div className="total-value">${totals.totalIva.toFixed(2)}</div>
         </div>
         <div className="total-box total-bs">
           <span className="total-label">Total Bs:</span>
           <div className="total-value">{totals.totalBs.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</div>
         </div>
-        <div className="total-box dolar-igtf">
-          <span className="total-label">DOLAR+IGTF:</span>
-          <div className="total-value">{(totals.totalUsd * (1 + config.igtf / 100)).toFixed(2)}</div>
-        </div>
         <div className="total-box divisas">
-          <span className="total-label">DIVISAS (USD):</span>
-          <div className="total-value">{totals.totalUsd.toFixed(2)}</div>
+          <span className="total-label">TOTAL USD:</span>
+          <div className="total-value">${totals.totalUsd.toFixed(2)}</div>
         </div>
         <div style={{marginLeft:'auto', display:'flex', gap:'15px', paddingRight:'10px', fontSize:'12px', fontWeight:'bold'}}>
-          <span>Item(s): <strong style={{color:'#000080'}}>{cart.length}</strong></span>
-          <span>Unidad(es): <strong style={{color:'#000080'}}>{cart.reduce((s, i) => s + i.cantidad, 0)}</strong></span>
+          <span>Items: <strong style={{color:'#000080'}}>{cart.length}</strong></span>
+          <span>Unidades: <strong style={{color:'#000080'}}>{cart.reduce((s, i) => s + i.cantidad, 0)}</strong></span>
         </div>
       </div>
     </div>
