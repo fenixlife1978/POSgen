@@ -99,7 +99,11 @@ export function Modals({
       setPaymentState({ method: 'Efectivo USD', amount: 0, payments: [], totalPaidUsd: 0 });
       setTimeout(() => methodRef.current?.focus(), 100);
     }
-  }, [activeModal, editingId, products]);
+
+    if (activeModal === 'modalEntrada') {
+      setPurchaseForm(prev => ({ ...prev, tasa: config.tasa }));
+    }
+  }, [activeModal, editingId, products, config.tasa]);
 
   const handleProductPriceCalc = (field: string, val: number) => {
     let newForm = { ...productForm };
@@ -623,7 +627,12 @@ export function Modals({
                 </div>
                 <div className="form-group">
                   <label>Tasa BCV:</label>
-                  <input type="number" value={purchaseForm.tasa} readOnly className="win-input bg-gray-300 font-bold" />
+                  <input 
+                    type="number" 
+                    value={purchaseForm.tasa} 
+                    onChange={e => setPurchaseForm({...purchaseForm, tasa: parseFloat(e.target.value) || 0})}
+                    className="win-input font-bold" 
+                  />
                 </div>
                 <div className="form-group">
                   <label>Tipo Compra:</label>
@@ -708,20 +717,20 @@ export function Modals({
               </div>
 
               <div className="grid grid-cols-4 gap-4">
-                <div className="win-window p-3 bg-black text-green-400 text-center">
-                  <div className="text-[10px] font-bold">TOTAL FACTURA USD</div>
+                <div className="win-window p-3 bg-[#d0f0d0] text-black text-center border-2 border-white shadow-sm">
+                  <div className="text-[10px] font-black uppercase">TOTAL FACTURA USD</div>
                   <div className="text-xl font-black">${purchaseTotals.toFixed(2)}</div>
                 </div>
-                <div className="win-window p-3 bg-black text-yellow-400 text-center">
-                  <div className="text-[10px] font-bold">EQUIV. BS.</div>
-                  <div className="text-xl font-black">Bs {(purchaseTotals * config.tasa).toFixed(2)}</div>
+                <div className="win-window p-3 bg-[#ffffa0] text-black text-center border-2 border-white shadow-sm">
+                  <div className="text-[10px] font-black uppercase">EQUIV. BS.</div>
+                  <div className="text-xl font-black">Bs {(purchaseTotals * purchaseForm.tasa).toFixed(2)}</div>
                 </div>
-                <div className="win-window p-3 bg-green-900 text-white text-center">
-                  <div className="text-[10px] font-bold">PAGADO USD</div>
+                <div className="win-window p-3 bg-[#b0d0f0] text-black text-center border-2 border-white shadow-sm">
+                  <div className="text-[10px] font-black uppercase">PAGADO USD</div>
                   <div className="text-xl font-black">${(purchaseForm.tipo === 'Contado' ? purchaseTotals : purchaseForm.pagoContadoUsd).toFixed(2)}</div>
                 </div>
-                <div className="win-window p-3 bg-red-900 text-white text-center">
-                  <div className="text-[10px] font-bold">PENDIENTE USD</div>
+                <div className="win-window p-3 bg-[#f0a0a0] text-black text-center border-2 border-white shadow-sm">
+                  <div className="text-[10px] font-black uppercase">PENDIENTE USD</div>
                   <div className="text-xl font-black">${(purchaseTotals - (purchaseForm.tipo === 'Contado' ? purchaseTotals : purchaseForm.pagoContadoUsd)).toFixed(2)}</div>
                 </div>
               </div>
@@ -742,8 +751,8 @@ export function Modals({
             <div className="modal-body space-y-4">
               <div className="win-window p-4 bg-gray-200 text-black text-center space-y-2 border-none shadow-inner">
                 <div className="text-sm font-bold opacity-70">TOTAL A CANCELAR</div>
-                <div className="text-4xl font-black">${getCartTotal().toFixed(2)}</div>
-                <div className="text-sm opacity-80">Equiv. Bs. {(getCartTotal() * config.tasa).toFixed(2)}</div>
+                <div className="text-4xl font-black text-black">${getCartTotal().toFixed(2)}</div>
+                <div className="text-sm opacity-80 text-black">Equiv. Bs. {(getCartTotal() * config.tasa).toFixed(2)}</div>
               </div>
 
               <div className="form-group">
@@ -774,7 +783,7 @@ export function Modals({
                     value={paymentState.amount} 
                     onChange={e => setPaymentState({...paymentState, amount: parseFloat(e.target.value) || 0})}
                     onKeyDown={e => handleCalculatorKeyDown(e, 'amount')}
-                    className="win-input h-10 w-full text-right font-bold text-lg"
+                    className="win-input h-10 w-full text-right font-bold text-lg text-black"
                   />
                 </div>
                 <button 
@@ -811,8 +820,8 @@ export function Modals({
                     {paymentState.payments.map((p, i) => (
                       <tr key={i}>
                         <td>{p.method}</td>
-                        <td className="text-right">${p.usd.toFixed(2)}</td>
-                        <td className="text-right">Bs {p.bs.toFixed(2)}</td>
+                        <td className="text-right text-black">${p.usd.toFixed(2)}</td>
+                        <td className="text-right text-black">Bs {p.bs.toFixed(2)}</td>
                         <td className="text-center">
                           <button onClick={() => {
                             const n = [...paymentState.payments];
@@ -834,14 +843,14 @@ export function Modals({
                 <div className="flex justify-between items-start mt-2 text-black">
                   <span className="font-black text-sm">{paymentState.totalPaidUsd >= getCartTotal() ? 'VUELTO:' : 'FALTA:'}</span>
                   <div className="text-right flex flex-col items-end">
-                    <div className="font-black text-3xl leading-none">${Math.abs(Math.round((paymentState.totalPaidUsd - getCartTotal()) * 100) / 100).toFixed(2)}</div>
+                    <div className="font-black text-3xl leading-none text-black">${Math.abs(Math.round((paymentState.totalPaidUsd - getCartTotal()) * 100) / 100).toFixed(2)}</div>
                   </div>
                 </div>
                 {/* Monto en Bs Centrado y mas grande solicitado */}
                 <div className="flex justify-center mt-3">
-                  <div className="bg-black/5 px-6 py-2 rounded-xl border border-black/10 shadow-inner flex flex-col items-center">
-                    <span className="text-[9px] font-black text-black/40 uppercase tracking-widest mb-1">Equivalencia en Bolívares</span>
-                    <span className="font-black text-2xl text-black">
+                  <div className="bg-white/50 px-6 py-3 rounded-xl border border-gray-400 shadow-inner flex flex-col items-center">
+                    <span className="text-[9px] font-black text-black/50 uppercase tracking-widest mb-1">Equivalencia en Bolívares</span>
+                    <span className="font-black text-3xl text-black">
                       Bs {Math.abs(Math.round((paymentState.totalPaidUsd - getCartTotal()) * config.tasa * 100) / 100).toFixed(2)}
                     </span>
                   </div>
@@ -851,7 +860,7 @@ export function Modals({
               <div className="modal-footer border-none pt-2">
                 <button className="btn w-full" onClick={onClose}>Cancelar</button>
                 {paymentState.totalPaidUsd >= getCartTotal() && (
-                  <button className="btn btn-success w-full h-14 text-xl shadow-lg border-2 border-white" onClick={finalizeSale}>
+                  <button className="btn btn-success w-full h-14 text-xl shadow-lg border-2 border-white text-black" onClick={finalizeSale}>
                     ✅ PROCESAR VENTA (F12)
                   </button>
                 )}
