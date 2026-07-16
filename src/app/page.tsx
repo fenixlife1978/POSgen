@@ -68,12 +68,21 @@ export default function POSPage() {
             setConfig(prev => ({ ...prev, vendedor: userData.name || user.email }));
             setIsLoggedIn(true);
           } else {
-            // Caso bootstrap: Admin inicial
-            setCurrentUser({ email: user.email, role: 'Administrador', name: 'Administrador' });
+            // Caso bootstrap: Si el usuario existe en Auth pero no en Firestore (reseteo de DB)
+            const fallbackAdmin = { 
+              id: user.uid,
+              email: user.email, 
+              role: 'Administrador', 
+              name: 'Admin de Arranque',
+              active: true
+            };
+            setCurrentUser(fallbackAdmin);
+            setConfig(prev => ({ ...prev, vendedor: 'ADMIN' }));
             setIsLoggedIn(true);
           }
         } catch (error) {
           console.error("Error al cargar perfil:", error);
+          // Fallback de emergencia para no bloquear al usuario si Firestore falla
           setIsLoggedIn(true);
         }
       } else {
@@ -139,6 +148,13 @@ export default function POSPage() {
         if (userData.role !== loginData.role) {
           await signOut(auth);
           notify(`Acceso denegado: El usuario no tiene el rol de ${loginData.role}`, 'error');
+          return;
+        }
+      } else {
+        // Si no hay documento pero el login fue exitoso, es un bootstrap admin
+        if (loginData.role !== 'Administrador') {
+          await signOut(auth);
+          notify('Solo el Administrador puede inicializar el sistema.', 'error');
           return;
         }
       }
