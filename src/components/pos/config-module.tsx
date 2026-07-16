@@ -179,7 +179,7 @@ export function ConfigModule({ active, onOpenModal, config, setConfig, notify }:
               style={{ background: '#f0a0a0' }}
               onClick={() => {
                 if(confirm('¿Está seguro de eliminar TODOS los datos del sistema? Esta acción no se puede deshacer.')) {
-                  localStorage.removeItem('autoparts_pos_db_final');
+                  localStorage.removeItem('autoparts_pos_db_v2');
                   window.location.reload();
                 }
               }}

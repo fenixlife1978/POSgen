@@ -15,11 +15,14 @@ import { UsersModule } from '@/components/pos/users-module';
 import { Modals } from '@/components/pos/modals';
 import { Product, Client, Provider, Sale, Account, CartItem, Presupuesto, User, InventoryMovement } from '@/types/pos';
 
+const DB_KEY = 'autoparts_pos_db_v2';
+
 export default function POSPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loginData, setLoginData] = useState({ username: '', password: '' });
   const [activeModule, setActiveModule] = useState('pos');
   const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
   
   // App State
   const [products, setProducts] = useState<Product[]>([]);
@@ -47,31 +50,40 @@ export default function POSPage() {
     nextInvoice: 1,
   });
 
-  // Initialization
+  // Initialization - Load from LocalStorage safely
   useEffect(() => {
-    const saved = localStorage.getItem('autoparts_pos_db_v2');
+    const saved = localStorage.getItem(DB_KEY);
     if (saved) {
-      const data = JSON.parse(saved);
-      if (data.products) setProducts(data.products);
-      if (data.clients) setClients(data.clients);
-      if (data.providers) setProviders(data.providers);
-      if (data.sales) setSales(data.sales);
-      if (data.accounts) setAccounts(data.accounts);
-      if (data.presupuestos) setPresupuestos(data.presupuestos);
-      if (data.users) setUsers(data.users);
-      if (data.config) setConfig(data.config);
-      if (data.movements) setMovements(data.movements);
+      try {
+        const data = JSON.parse(saved);
+        if (data.products) setProducts(data.products);
+        if (data.clients) setClients(data.clients);
+        if (data.providers) setProviders(data.providers);
+        if (data.sales) setSales(data.sales);
+        if (data.accounts) setAccounts(data.accounts);
+        if (data.presupuestos) setPresupuestos(data.presupuestos);
+        if (data.users) setUsers(data.users);
+        if (data.config) setConfig(data.config);
+        if (data.movements) setMovements(data.movements);
+      } catch (error) {
+        console.error("Error parsing local database:", error);
+      }
     } else {
+      // Default users if first time
       setUsers([
         { id: '1', username: 'Admin', password: '123', name: 'Administrador', role: 'Administrador', active: true }
       ]);
     }
+    setIsLoaded(true);
   }, []);
 
+  // Save to LocalStorage safely only after load
   useEffect(() => {
-    const data = { products, clients, providers, sales, accounts, presupuestos, users, config, movements };
-    localStorage.setItem('autoparts_pos_db_v2', JSON.stringify(data));
-  }, [products, clients, providers, sales, accounts, presupuestos, users, config, movements]);
+    if (isLoaded) {
+      const data = { products, clients, providers, sales, accounts, presupuestos, users, config, movements };
+      localStorage.setItem(DB_KEY, JSON.stringify(data));
+    }
+  }, [products, clients, providers, sales, accounts, presupuestos, users, config, movements, isLoaded]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
