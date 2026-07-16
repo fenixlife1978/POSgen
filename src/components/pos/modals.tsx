@@ -59,7 +59,13 @@ export function Modals({
     kitComponents: [], iva: 16
   };
   const [productForm, setProductForm] = useState<Product>(initialProduct);
-  const [stockInicial, setStockInicial] = useState(0);
+  const [stockInicial, setStockInicial] = useState<string>('0');
+  
+  // States for text-based numeric inputs to allow free typing
+  const [markupText, setMarkupText] = useState<string>('30');
+  const [precioUsdText, setPrecioUsdText] = useState<string>('0');
+  const [precioBsText, setPrecioBsText] = useState<string>('0');
+  const [stockMinText, setStockMinText] = useState<string>('5');
 
   // --- CLIENT FORM ---
   const initialClient: Client = {
@@ -70,12 +76,6 @@ export function Modals({
   // --- PROVIDER FORM ---
   const initialProvider: Provider = { id: '', rif: '', nombre: '', direccion: '', contacto: '', telefono: '' };
   const [providerForm, setProviderForm] = useState<Provider>(initialProvider);
-
-  // --- COMPRA FORM ---
-  const [purchaseForm, setPurchaseForm] = useState({
-    proveedorId: '', nroFactura: '', tasa: config.tasa, tipo: 'Contado' as 'Contado' | 'Credito' | 'Mixto', 
-    diasCredito: 0, pagoContadoUsd: 0, pagoContadoBs: 0, items: [] as any[]
-  });
 
   // --- PAYMENT CALCULATOR ---
   const [paymentState, setPaymentState] = useState({
@@ -92,11 +92,19 @@ export function Modals({
       const prod = products[editingId];
       if (prod) {
         setProductForm({ ...prod });
-        setStockInicial(prod.stock);
+        setStockInicial(prod.stock.toString());
+        setMarkupText(prod.utilidadPorcentaje.toString());
+        setPrecioUsdText(prod.precio1.toString());
+        setPrecioBsText((prod.precio1 * config.tasa).toFixed(2));
+        setStockMinText(prod.stockMin.toString());
       }
     } else if (activeModal === 'modalProducto') {
       setProductForm(initialProduct);
-      setStockInicial(0);
+      setStockInicial('0');
+      setMarkupText('30');
+      setPrecioUsdText('0');
+      setPrecioBsText('0');
+      setStockMinText('5');
     }
 
     if (activeModal === 'modalCliente' && editingId !== null) {
@@ -124,12 +132,9 @@ export function Modals({
       notify('❌ Cédula/RIF y Nombre son obligatorios', 'error');
       return;
     }
-    
     let updatedClients = [...clients];
     const isNew = editingId === null;
-
     if (isNew) {
-      // Validar duplicado
       if (clients.some(c => c.rifNum === clientForm.rifNum)) {
         notify('❌ Este número de identificación ya existe', 'error');
         return;
@@ -138,30 +143,37 @@ export function Modals({
     } else {
       updatedClients[editingId] = clientForm;
     }
-
     setClients(updatedClients);
     notify(`✅ Cliente ${isNew ? 'creado' : 'actualizado'} correctamente`);
     onClose();
   };
 
-  const handleProductPriceCalc = (field: string, val: number) => {
+  const handleProductPriceCalc = (field: string, valStr: string) => {
     let newForm = { ...productForm };
     const cost = newForm.costoPromedio;
     const tasa = config.tasa;
+    const val = parseFloat(valStr) || 0;
 
     if (field === 'utilidadPorcentaje') {
+      setMarkupText(valStr);
+      const newPrice = val >= 100 ? cost : Math.round((cost / (1 - val/100)) * 100) / 100;
       newForm.utilidadPorcentaje = val;
-      newForm.precio1 = val >= 100 ? cost : Math.round((cost / (1 - val/100)) * 100) / 100;
+      newForm.precio1 = newPrice;
+      setPrecioUsdText(newPrice.toString());
+      setPrecioBsText((newPrice * tasa).toFixed(2));
     } else if (field === 'precio1') {
+      setPrecioUsdText(valStr);
       newForm.precio1 = val;
       newForm.utilidadPorcentaje = val > cost ? Math.round((1 - (cost / val)) * 10000) / 100 : 0;
+      setMarkupText(newForm.utilidadPorcentaje.toString());
+      setPrecioBsText((val * tasa).toFixed(2));
     } else if (field === 'precioBs') {
+      setPrecioBsText(valStr);
       const priceUsd = val / tasa;
       newForm.precio1 = Math.round(priceUsd * 100) / 100;
       newForm.utilidadPorcentaje = newForm.precio1 > cost ? Math.round((1 - (cost / newForm.precio1)) * 10000) / 100 : 0;
-    } else if (field === 'costoPromedio') {
-      newForm.costoPromedio = val;
-      newForm.precio1 = newForm.utilidadPorcentaje >= 100 ? val : Math.round((val / (1 - newForm.utilidadPorcentaje/100)) * 100) / 100;
+      setPrecioUsdText(newForm.precio1.toString());
+      setMarkupText(newForm.utilidadPorcentaje.toString());
     }
     setProductForm(newForm);
   };
@@ -174,26 +186,35 @@ export function Modals({
     
     let updatedProducts = [...products];
     const isNew = editingId === null;
+    
+    // Final numeric sync
+    const finalForm = {
+      ...productForm,
+      stock: parseInt(stockInicial) || 0,
+      stockMin: parseInt(stockMinText) || 0,
+      utilidadPorcentaje: parseFloat(markupText) || 0,
+      precio1: parseFloat(precioUsdText) || 0
+    };
 
     if (isNew) {
-      updatedProducts.push(productForm);
-      if (stockInicial > 0) {
+      updatedProducts.push(finalForm);
+      if (parseInt(stockInicial) > 0) {
         setMovements(prev => [...prev, {
           id: uuidv4(),
           fecha: new Date().toISOString(),
-          codigoProducto: productForm.codigo,
+          codigoProducto: finalForm.codigo,
           tipo: 'ENTRADA',
-          cantidad: stockInicial,
+          cantidad: parseInt(stockInicial),
           stockPrevio: 0,
-          stockNuevo: stockInicial,
-          costo: productForm.costoPromedio,
+          stockNuevo: parseInt(stockInicial),
+          costo: finalForm.costoPromedio,
           referencia: 'STOCK INICIAL',
           comentario: 'Carga inicial de inventario',
           usuario: config.vendedor
         }]);
       }
     } else {
-      updatedProducts[editingId] = productForm;
+      updatedProducts[editingId] = finalForm;
     }
 
     setProducts(updatedProducts);
@@ -339,7 +360,6 @@ export function Modals({
                     <input type="text" value={clientForm.nombre} onChange={e => setClientForm({...clientForm, nombre: e.target.value})} className="win-input" />
                   </div>
                 </div>
-
                 <div className="settings-section">
                   <h3>Contacto</h3>
                   <div className="form-group">
@@ -352,13 +372,11 @@ export function Modals({
                   </div>
                 </div>
               </div>
-
               <div className="space-y-4">
                 <div className="settings-section">
                   <h3>Dirección Fiscal</h3>
                   <textarea value={clientForm.direccion} onChange={e => setClientForm({...clientForm, direccion: e.target.value})} className="win-input" style={{ height: '80px' }} />
                 </div>
-
                 <div className="settings-section">
                   <h3>Configuración Comercial</h3>
                   <div className="form-group">
@@ -402,18 +420,11 @@ export function Modals({
                 <span className="text-sm font-bold text-gray-700">Bs. {(totalVentaUsd * config.tasa).toFixed(2)}</span>
               </div>
             </div>
-
             <div className="p-4 border-2 border-gray-400 bg-white">
               <div className="grid grid-cols-2 gap-2 mb-3">
                 <div className="form-group">
                   <label>Método Pago:</label>
-                  <select 
-                    ref={methodRef} 
-                    value={paymentState.method} 
-                    onChange={e => setPaymentState({...paymentState, method: e.target.value})} 
-                    className="win-input"
-                    onKeyDown={e => { if(e.key === 'Enter') amountRef.current?.focus(); }}
-                  >
+                  <select ref={methodRef} value={paymentState.method} onChange={e => setPaymentState({...paymentState, method: e.target.value})} className="win-input" onKeyDown={e => { if(e.key === 'Enter') amountRef.current?.focus(); }}>
                     <option value="Efectivo Bs.">Efectivo Bs.</option>
                     <option value="Efectivo USD">Efectivo USD</option>
                     <option value="Tarjeta/Punto">Tarjeta/Punto</option>
@@ -428,20 +439,11 @@ export function Modals({
                     <label>Monto:</label>
                     <button className="text-[8px] font-bold underline text-blue-800" onClick={handleSetPagoExacto}>PAGO EXACTO</button>
                   </div>
-                  <input 
-                    ref={amountRef} 
-                    type="number" 
-                    value={paymentState.amount || ''} 
-                    onChange={e => setPaymentState({...paymentState, amount: parseFloat(e.target.value) || 0})} 
-                    className="win-input text-right font-bold" 
-                    placeholder="0.00"
-                    onKeyDown={e => { if(e.key === 'Enter') addPayment(); }}
-                  />
+                  <input ref={amountRef} type="number" value={paymentState.amount || ''} onChange={e => setPaymentState({...paymentState, amount: parseFloat(e.target.value) || 0})} className="win-input text-right font-bold" placeholder="0.00" onKeyDown={e => { if(e.key === 'Enter') addPayment(); }} />
                 </div>
               </div>
               <button className="btn btn-primary w-full py-2 shadow-inner" onClick={addPayment}>➕ AÑADIR ABONO</button>
             </div>
-
             <div className="table-responsive h-24 bg-gray-50">
               <table className="data-table">
                 <thead><tr><th>Método</th><th className="text-right">USD</th><th className="text-right">Bs.</th></tr></thead>
@@ -452,17 +454,10 @@ export function Modals({
                 </tbody>
               </table>
             </div>
-
             <div className="win-window p-4 bg-gray-300 text-center">
-              <div className="text-[10px] font-bold text-gray-600 uppercase mb-1">
-                {vueltoUsd > 0 ? 'Vuelto a entregar' : 'Faltante por liquidar'}
-              </div>
-              <div className="text-3xl font-black text-black">
-                {vueltoUsd > 0 ? `$${vueltoUsd.toFixed(2)}` : `$${faltanteUsd.toFixed(2)}`}
-              </div>
-              <div className="text-lg font-bold text-black mt-1">
-                Bs. {(vueltoUsd > 0 ? vueltoUsd * config.tasa : faltanteUsd * config.tasa).toFixed(2)}
-              </div>
+              <div className="text-[10px] font-bold text-gray-600 uppercase mb-1">{vueltoUsd > 0 ? 'Vuelto a entregar' : 'Faltante por liquidar'}</div>
+              <div className="text-3xl font-black text-black">{vueltoUsd > 0 ? `$${vueltoUsd.toFixed(2)}` : `$${faltanteUsd.toFixed(2)}`}</div>
+              <div className="text-lg font-bold text-black mt-1">Bs. {(vueltoUsd > 0 ? vueltoUsd * config.tasa : faltanteUsd * config.tasa).toFixed(2)}</div>
             </div>
           </div>
           <div className="modal-footer">
@@ -475,160 +470,159 @@ export function Modals({
       {activeModal === 'modalProducto' && (
         <div className="modal-window large" onClick={e => e.stopPropagation()}>
           <div className="modal-titlebar">
-            <span>📦 FICHA MAESTRA DE PRODUCTO / SERVICIO</span>
+            <span>💾 FICHA MAESTRA DE PRODUCTO</span>
             <span className="modal-close" onClick={onClose}>✕</span>
           </div>
           <div className="modal-body">
-            <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div className="settings-section">
-                  <h3>Identificación</h3>
-                  <div className="form-group">
-                    <label>Código:</label>
-                    <input type="text" value={productForm.codigo} onChange={e => setProductForm({...productForm, codigo: e.target.value})} className="win-input font-bold" />
-                  </div>
-                  <div className="form-group">
-                    <label>Nombre del Producto / Servicio:</label>
-                    <input type="text" value={productForm.nombre} onChange={e => setProductForm({...productForm, nombre: e.target.value})} className="win-input" />
+            <div className="grid grid-cols-3 gap-4">
+              {/* Column 1: Identificación */}
+              <div className="settings-section space-y-4">
+                <div className="form-group">
+                  <label>Código:</label>
+                  <input type="text" value={productForm.codigo} onChange={e => setProductForm({...productForm, codigo: e.target.value})} className="win-input font-bold" />
+                </div>
+                <div className="form-group">
+                  <label>Código de Barras:</label>
+                  <div className="flex gap-1">
+                    <input type="text" value={productForm.barcode} onChange={e => setProductForm({...productForm, barcode: e.target.value})} className="win-input flex-1" />
+                    <button className="btn p-1 px-2"><Search size={14}/></button>
                   </div>
                 </div>
+                <div className="form-group">
+                  <label>Nombre del Producto:</label>
+                  <input type="text" value={productForm.nombre} onChange={e => setProductForm({...productForm, nombre: e.target.value})} className="win-input" />
+                </div>
+                <div className="form-group">
+                  <label>Referencia / OEM:</label>
+                  <input type="text" value={productForm.referencia} onChange={e => setProductForm({...productForm, referencia: e.target.value})} className="win-input" />
+                </div>
+              </div>
 
-                <div className="settings-section">
-                  <h3>Atributos</h3>
-                  <div className="form-row items-end">
-                    <div className="form-group flex-1">
-                      <label>Departamento:</label>
-                      <div className="flex gap-1">
-                        <select value={productForm.departamento} onChange={e => setProductForm({...productForm, departamento: e.target.value})} className="win-input">
-                          {departamentos.map(d => <option key={d} value={d}>{d}</option>)}
-                        </select>
-                        <button className="btn px-2" onClick={() => {const n=prompt('Nuevo Dept:'); if(n) setDepartamentos([...departamentos, n])}}>+</button>
-                      </div>
-                    </div>
+              {/* Column 2: Atributos */}
+              <div className="settings-section space-y-4">
+                <div className="form-group">
+                  <label>Marca:</label>
+                  <div className="flex gap-1">
+                    <select value={productForm.marca} onChange={e => setProductForm({...productForm, marca: e.target.value})} className="win-input flex-1">
+                      {marcas.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                    <button className="btn px-2" onClick={() => {const n=prompt('Nueva Marca:'); if(n) setMarcas([...marcas, n])}}>+</button>
+                    <button className="btn px-2" onClick={() => setMarcas(marcas.filter(m => m !== productForm.marca))}>-</button>
                   </div>
-                  <div className="form-row items-end mt-2">
-                    <div className="form-group flex-1">
-                      <label>Categoría:</label>
-                      <div className="flex gap-1">
-                        <select value={productForm.categoria} onChange={e => setProductForm({...productForm, categoria: e.target.value})} className="win-input">
-                          {categorias.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                        <button className="btn px-2" onClick={() => {const n=prompt('Nueva Cat:'); if(n) setCategorias([...categorias, n])}}>+</button>
-                      </div>
-                    </div>
+                </div>
+                <div className="form-group">
+                  <label>Unidad de Medida:</label>
+                  <div className="flex gap-1">
+                    <select value={productForm.unidad} onChange={e => setProductForm({...productForm, unidad: e.target.value})} className="win-input flex-1">
+                      {unidades.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                    <button className="btn px-2" onClick={() => {const n=prompt('Nueva Unidad:'); if(n) setUnidades([...unidades, n])}}>+</button>
+                    <button className="btn px-2" onClick={() => setUnidades(unidades.filter(u => u !== productForm.unidad))}>-</button>
                   </div>
-                  <div className="form-row items-end mt-2">
-                    <div className="form-group flex-1">
-                      <label>Unidad:</label>
-                      <div className="flex gap-1">
-                        <select value={productForm.unidad} onChange={e => setProductForm({...productForm, unidad: e.target.value})} className="win-input">
-                          {unidades.map(u => <option key={u} value={u}>{u}</option>)}
-                        </select>
-                        <button className="btn px-2" onClick={() => {const n=prompt('Nueva Unidad:'); if(n) setUnidades([...unidades, n])}}>+</button>
-                      </div>
-                    </div>
+                </div>
+                <div className="form-group">
+                  <label>Categoría:</label>
+                  <div className="flex gap-1">
+                    <select value={productForm.categoria} onChange={e => setProductForm({...productForm, categoria: e.target.value})} className="win-input flex-1">
+                      {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <button className="btn px-2" onClick={() => {const n=prompt('Nueva Cat:'); if(n) setCategorias([...categorias, n])}}>+</button>
+                    <button className="btn px-2" onClick={() => setCategorias(categorias.filter(c => c !== productForm.categoria))}>-</button>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Departamento:</label>
+                  <div className="flex gap-1">
+                    <select value={productForm.departamento} onChange={e => setProductForm({...productForm, departamento: e.target.value})} className="win-input flex-1">
+                      {departamentos.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                    <button className="btn px-2" onClick={() => {const n=prompt('Nuevo Dept:'); if(n) setDepartamentos([...departamentos, n])}}>+</button>
+                    <button className="btn px-2" onClick={() => setDepartamentos(departamentos.filter(d => d !== productForm.departamento))}>-</button>
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <div className="settings-section">
-                  <h3>Lógica Financiera</h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="form-group">
-                      <label>Costo CPP (USD):</label>
-                      <input type="number" value={productForm.costoPromedio} onChange={e => handleProductPriceCalc('costoPromedio', parseFloat(e.target.value) || 0)} className="win-input" />
-                    </div>
-                    <div className="form-group">
-                      <label>Ganancia (%):</label>
-                      <input type="number" value={productForm.utilidadPorcentaje} onChange={e => handleProductPriceCalc('utilidadPorcentaje', parseFloat(e.target.value) || 0)} className="win-input" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="form-group">
-                      <label>Precio Detal (USD):</label>
-                      <input type="number" value={productForm.precio1} onChange={e => handleProductPriceCalc('precio1', parseFloat(e.target.value) || 0)} className="win-input font-bold text-blue-900" />
-                    </div>
-                    <div className="form-group">
-                      <label>Precio Detal (Bs.):</label>
-                      <input type="number" value={Math.round(productForm.precio1 * config.tasa * 100) / 100} onChange={e => handleProductPriceCalc('precioBs', parseFloat(e.target.value) || 0)} className="win-input font-bold text-red-900" />
-                    </div>
-                  </div>
-                  <div className="form-group mt-2">
-                    <label>IVA Aplicable:</label>
-                    <select value={productForm.iva} onChange={e => setProductForm({...productForm, iva: parseInt(e.target.value)})} className="win-input">
-                      <option value="16">General (16%)</option>
-                      <option value="8">Reducida (8%)</option>
-                      <option value="0">Exento (0%)</option>
-                    </select>
-                  </div>
+              {/* Column 3: Lógica Financiera */}
+              <div className="settings-section space-y-4">
+                <div className="form-group">
+                  <label>Ganancia Markup (%):</label>
+                  <input type="text" value={markupText} onChange={e => handleProductPriceCalc('utilidadPorcentaje', e.target.value)} className="win-input text-blue-800 font-bold" />
                 </div>
+                <div className="form-group">
+                  <label>IVA / Impuestos:</label>
+                  <select value={productForm.iva} onChange={e => setProductForm({...productForm, iva: parseInt(e.target.value)})} className="win-input">
+                    <option value="16">General (16%)</option>
+                    <option value="8">Reducida (8%)</option>
+                    <option value="0">Exento (0%)</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Precio Detal (USD):</label>
+                  <input type="text" value={precioUsdText} onChange={e => handleProductPriceCalc('precio1', e.target.value)} className="win-input font-bold bg-yellow-100" />
+                </div>
+                <div className="form-group">
+                  <label>Precio Detal (Bs.):</label>
+                  <input type="text" value={precioBsText} onChange={e => handleProductPriceCalc('precioBs', e.target.value)} className="win-input font-bold" />
+                </div>
+              </div>
+            </div>
 
-                <div className="settings-section">
-                  <h3>Inventario</h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="form-group">
-                      <label>Stock Inicial:</label>
-                      <input type="number" value={stockInicial} onChange={e => setStockInicial(parseInt(e.target.value) || 0)} className="win-input" disabled={editingId !== null} />
-                    </div>
-                    <div className="form-group">
-                      <label>Stock Mínimo:</label>
-                      <input type="number" value={productForm.stockMin} onChange={e => setProductForm({...productForm, stockMin: parseInt(e.target.value) || 0})} className="win-input" />
-                    </div>
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <div className="settings-section">
+                <h3 className="text-blue-800 text-xs mb-3">STOCK Y TIPO</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="form-group">
+                    <label>Stock Mínimo:</label>
+                    <input type="text" value={stockMinText} onChange={e => setStockMinText(e.target.value)} className="win-input" />
                   </div>
-                  <div className="form-group mt-3">
-                    <label className="checkbox-label">
-                      <input type="checkbox" checked={productForm.isKit} onChange={e => setProductForm({...productForm, isKit: e.target.checked})} />
-                      Es Kit / Combo
-                    </label>
+                  <div className="form-group">
+                    <label>Stock Inicial:</label>
+                    <input type="text" value={stockInicial} onChange={e => setStockInicial(e.target.value)} className="win-input bg-yellow-50" disabled={editingId !== null} />
                   </div>
-                  
-                  {productForm.isKit && (
-                    <div className="p-3 bg-blue-50 border border-blue-200 mt-2 space-y-2 animate-in slide-in-from-top-2">
-                      <label className="checkbox-label text-[10px]">
-                        <input type="checkbox" checked={productForm.stockPropio} onChange={e => setProductForm({...productForm, stockPropio: e.target.checked})} />
-                        Maneja Stock Propio (Físico)
-                      </label>
-                      
-                      {!productForm.stockPropio && (
-                        <div className="mt-2 space-y-2">
-                          <p className="text-[9px] font-bold text-blue-800 uppercase">Componentes del Kit Virtual:</p>
-                          <div className="flex gap-1">
-                            <select className="win-input text-[10px] flex-1" id="kitCompSel">
-                              <option value="">Seleccionar Item...</option>
-                              {products.filter(p => p.codigo !== productForm.codigo).map((p, idx) => (
-                                <option key={p.codigo} value={idx}>{p.nombre}</option>
-                              ))}
-                            </select>
-                            <button className="btn px-2" onClick={() => {
-                              const sel = document.getElementById('kitCompSel') as HTMLSelectElement;
-                              const idx = parseInt(sel.value);
-                              if(!isNaN(idx)) {
-                                const p = products[idx];
-                                setProductForm({...productForm, kitComponents: [...productForm.kitComponents, { productIndex: idx, codigo: p.codigo, cantidad: 1 }]});
-                              }
-                            }}>+</button>
-                          </div>
-                          <div className="max-h-20 overflow-y-auto border bg-white">
-                            {productForm.kitComponents.map((c, i) => (
-                              <div key={i} className="flex justify-between items-center p-1 text-[10px] border-b">
-                                <span>{c.codigo}</span>
-                                <input type="number" value={c.cantidad} onChange={e => {const n=[...productForm.kitComponents]; n[i].cantidad=parseInt(e.target.value)||1; setProductForm({...productForm, kitComponents:n})}} className="w-8 text-center border" />
-                                <button className="text-red-600" onClick={() => {const n=[...productForm.kitComponents]; n.splice(i,1); setProductForm({...productForm, kitComponents:n})}}>x</button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
+                <div className="form-group mt-3">
+                  <label>Ubicación Física:</label>
+                  <input type="text" value={productForm.ubicacion} onChange={e => setProductForm({...productForm, ubicacion: e.target.value})} className="win-input" />
+                </div>
+              </div>
+
+              <div className="settings-section flex flex-col justify-center items-center">
+                <label className="checkbox-label text-lg">
+                  <input type="checkbox" checked={productForm.isKit} onChange={e => setProductForm({...productForm, isKit: e.target.checked})} />
+                  Es Kit / Combo
+                </label>
+                {productForm.isKit && (
+                  <div className="p-2 border mt-2 bg-white w-full">
+                    <label className="checkbox-label text-[10px]">
+                      <input type="checkbox" checked={productForm.stockPropio} onChange={e => setProductForm({...productForm, stockPropio: e.target.checked})} />
+                      Maneja Stock Propio
+                    </label>
+                    {!productForm.stockPropio && (
+                      <div className="mt-1 max-h-20 overflow-y-auto text-[9px]">
+                        {/* Component selection logic same as before */}
+                        <select className="w-full win-input" onChange={e => {
+                          const idx = parseInt(e.target.value);
+                          if(!isNaN(idx)){
+                            const p = products[idx];
+                            setProductForm({...productForm, kitComponents: [...productForm.kitComponents, {productIndex: idx, codigo: p.codigo, cantidad: 1}]});
+                          }
+                        }}>
+                          <option>Añadir componente...</option>
+                          {products.map((p, i) => <option key={i} value={i}>{p.nombre}</option>)}
+                        </select>
+                        {productForm.kitComponents.map((c, i) => <div key={i}>{c.codigo} x {c.cantidad}</div>)}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
           <div className="modal-footer">
             <button className="btn" onClick={onClose}>Cancelar</button>
-            <button className="btn btn-primary" onClick={handleSaveProduct}>💾 GUARDAR PRODUCTO</button>
+            <button className="btn btn-primary flex gap-2" onClick={handleSaveProduct}>
+              <Save size={14}/> GUARDAR FICHA
+            </button>
           </div>
         </div>
       )}
@@ -639,15 +633,10 @@ export function Modals({
             <div className="text-center font-bold text-xs uppercase border-b-2 border-black pb-2 mb-2">
               <div>{config.nombreEmpresa}</div>
               <div>RIF: {config.rifEmpresa}</div>
-              <div className="text-[8px] font-normal">{config.direccion}</div>
-              <div className="text-[8px] font-normal">TEL: {config.telefono}</div>
             </div>
-            
             <div className="flex justify-between"><span>FACTURA:</span> <span>{lastSale.numero}</span></div>
             <div className="flex justify-between"><span>FECHA:</span> <span>{new Date(lastSale.fecha).toLocaleString()}</span></div>
-            <div className="flex justify-between"><span>VEND:</span> <span>{lastSale.vendedor}</span></div>
             <div className="border-b border-dashed border-black my-1" />
-            
             <div className="space-y-1">
               <div className="flex justify-between font-bold"><span>DESC</span> <span>CANT</span> <span>TOTAL</span></div>
               {lastSale.items.map((it, i) => (
@@ -658,24 +647,10 @@ export function Modals({
                 </div>
               ))}
             </div>
-            
             <div className="border-t-2 border-black pt-2 mt-2 space-y-1">
               <div className="flex justify-between"><span>SUBTOTAL:</span> <span>${lastSale.subtotal.toFixed(2)}</span></div>
-              <div className="flex justify-between"><span>IVA:</span> <span>${lastSale.iva.toFixed(2)}</span></div>
               <div className="flex justify-between font-bold text-xs"><span>TOTAL USD:</span> <span>${lastSale.totalUsd.toFixed(2)}</span></div>
-              <div className="flex justify-between font-bold"><span>TOTAL BS:</span> <span>{lastSale.totalBs.toFixed(2)}</span></div>
             </div>
-
-            <div className="mt-4 border-t pt-2 text-[8px]">
-              <div className="flex justify-between font-bold"><span>METODOS:</span> <span>{lastSale.pago}</span></div>
-              <div className="flex justify-between"><span>RECIBIDO:</span> <span>${lastSale.recibidoUsd.toFixed(2)}</span></div>
-              <div className="flex justify-between font-bold"><span>VUELTO:</span> <span>${lastSale.cambioUsd.toFixed(2)}</span></div>
-            </div>
-
-            <div className="text-center mt-6 text-[8px] border-t pt-2">
-              GRACIAS POR SU COMPRA
-            </div>
-
             <div className="flex gap-2 mt-4 no-print">
               <button className="btn btn-primary flex-1 py-1 text-[10px]" onClick={() => window.print()}>🖨️ IMPRIMIR</button>
               <button className="btn flex-1 py-1 text-[10px]" onClick={() => setLastSale(null)}>CERRAR</button>
