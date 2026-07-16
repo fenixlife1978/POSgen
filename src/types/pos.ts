@@ -56,6 +56,15 @@ export interface Client {
   saldo: number;
 }
 
+export interface Provider {
+  id: string;
+  rif: string;
+  nombre: string;
+  direccion: string;
+  contacto: string;
+  telefono: string;
+}
+
 export interface CartItem {
   productIndex: number;
   codigo: string;
@@ -126,7 +135,7 @@ export interface InventoryMovement {
   stockPrevio: number;
   stockNuevo: number;
   costo: number;
-  referencia: string; // Nro Factura, Nro Venta, etc
+  referencia: string;
   comentario: string;
   usuario: string;
 }

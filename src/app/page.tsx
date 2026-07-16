@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -5,6 +6,7 @@ import { PosModule } from '@/components/pos/pos-module';
 import { DashboardModule } from '@/components/pos/dashboard-module';
 import { ProductsModule } from '@/components/pos/products-module';
 import { ClientsModule } from '@/components/pos/clients-module';
+import { ProvidersModule } from '@/components/pos/providers-module';
 import { SalesModule } from '@/components/pos/sales-module';
 import { InventoryModule } from '@/components/pos/inventory-module';
 import { ReportsModule } from '@/components/pos/reports-module';
@@ -12,7 +14,7 @@ import { ConfigModule } from '@/components/pos/config-module';
 import { AccountsModule } from '@/components/pos/accounts-module';
 import { UsersModule } from '@/components/pos/users-module';
 import { Modals } from '@/components/pos/modals';
-import { Product, Client, Sale, Account, CartItem, Presupuesto, User, InventoryMovement } from '@/types/pos';
+import { Product, Client, Provider, Sale, Account, CartItem, Presupuesto, User, InventoryMovement } from '@/types/pos';
 
 export default function POSPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -23,6 +25,7 @@ export default function POSPage() {
   // App State
   const [products, setProducts] = useState<Product[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [providers, setProviders] = useState<Provider[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
@@ -30,10 +33,10 @@ export default function POSPage() {
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [posCart, setPosCart] = useState<CartItem[]>([]);
   const [selectedRow, setSelectedRow] = useState(-1);
-  const [editingId, setEditingId] = useState<string | number | null>(null);
+  const [editingId, setEditingId] = useState<any>(null);
 
   const [config, setConfig] = useState({
-    tasa: 36.50, // Ejemplo Tasa BCV
+    tasa: 36.50,
     igtf: 3,
     iva: 16,
     rifEmpresa: 'J-12345678-9',
@@ -47,11 +50,12 @@ export default function POSPage() {
 
   // Initialization
   useEffect(() => {
-    const saved = localStorage.getItem('autoparts_pos_db_final');
+    const saved = localStorage.getItem('autoparts_pos_db_v2');
     if (saved) {
       const data = JSON.parse(saved);
       if (data.products) setProducts(data.products);
       if (data.clients) setClients(data.clients);
+      if (data.providers) setProviders(data.providers);
       if (data.sales) setSales(data.sales);
       if (data.accounts) setAccounts(data.accounts);
       if (data.presupuestos) setPresupuestos(data.presupuestos);
@@ -66,9 +70,9 @@ export default function POSPage() {
   }, []);
 
   useEffect(() => {
-    const data = { products, clients, sales, accounts, presupuestos, users, config, movements };
-    localStorage.setItem('autoparts_pos_db_final', JSON.stringify(data));
-  }, [products, clients, sales, accounts, presupuestos, users, config, movements]);
+    const data = { products, clients, providers, sales, accounts, presupuestos, users, config, movements };
+    localStorage.setItem('autoparts_pos_db_v2', JSON.stringify(data));
+  }, [products, clients, providers, sales, accounts, presupuestos, users, config, movements]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,7 +94,7 @@ export default function POSPage() {
     }
   };
 
-  const openModal = (id: string, dataId?: string | number) => {
+  const openModal = (id: string, dataId?: any) => {
     setEditingId(dataId || null);
     setActiveModal(id);
   };
@@ -136,6 +140,7 @@ export default function POSPage() {
           { id: 'dashboard', label: 'Dashboard' },
           { id: 'productos', label: 'Productos' },
           { id: 'clientes', label: 'Clientes' },
+          { id: 'proveedores', label: 'Proveedores' },
           { id: 'ventas', label: 'Ventas' },
           { id: 'inventario', label: 'Inventario' },
           { id: 'reportes', label: 'Reportes' },
@@ -152,7 +157,8 @@ export default function POSPage() {
         <PosModule active={activeModule === 'pos'} onOpenModal={openModal} products={products} clients={clients} cart={posCart} setCart={setPosCart} config={config} notify={notify} selectedRow={selectedRow} setSelectedRow={setSelectedRow} />
         <DashboardModule active={activeModule === 'dashboard'} sales={sales} products={products} config={config} />
         <ProductsModule active={activeModule === 'productos'} onOpenModal={openModal} products={products} tasa={config.tasa} notify={notify} />
-        <ClientsModule active={activeModule === 'clientes'} onOpenModal={openModal} clients={clients} setClients={setClients} notify={notify} />
+        <ClientsModule active={activeModule === 'clientes'} onOpenModal={openModal} clients={clients} />
+        <ProvidersModule active={activeModule === 'proveedores'} onOpenModal={openModal} providers={providers} />
         <SalesModule active={activeModule === 'ventas'} sales={sales} setSales={setSales} products={products} setProducts={setProducts} notify={notify} />
         <InventoryModule active={activeModule === 'inventario'} onOpenModal={openModal} products={products} movements={movements} />
         <ReportsModule active={activeModule === 'reportes'} sales={sales} products={products} clients={clients} config={config} />
@@ -174,6 +180,8 @@ export default function POSPage() {
         setProducts={setProducts} 
         clients={clients} 
         setClients={setClients} 
+        providers={providers}
+        setProviders={setProviders}
         sales={sales} 
         setSales={setSales} 
         accounts={accounts} 
