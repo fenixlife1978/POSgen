@@ -28,7 +28,6 @@ export function Modals({
   cart, setCart, config, notify, selectedRow 
 }: ModalsProps) {
   
-  // Estados para Ficha Maestra
   const [marcas, setMarcas] = useState(['Universal', 'Toyota', 'Ford', 'Mobil', 'Castrol', 'Fram', 'NGK', 'Brembo', 'Gates', 'MAC', 'Rain-X', 'Prestone', 'Valvoline']);
   const [unidades, setUnidades] = useState(['Unidad', 'Kilo', 'Litro', 'Caja', 'Galón', 'Kit', 'Servicio']);
   const [categorias, setCategorias] = useState(['Repuesto', 'Lubricante', 'Servicio', 'Accesorio']);
@@ -71,7 +70,6 @@ export function Modals({
     capacidadContenido: 0
   });
 
-  // Estados para Entrada por Compra
   const [purchaseForm, setPurchaseForm] = useState({
     proveedor: '',
     nroFactura: '',
@@ -89,7 +87,6 @@ export function Modals({
     costo: 0
   });
 
-  // Efecto para actualizar tasa por defecto en compra
   useEffect(() => {
     if (activeModal === 'modalEntrada') {
       setPurchaseForm(prev => ({ ...prev, tasa: config.tasa }));
@@ -97,11 +94,15 @@ export function Modals({
   }, [activeModal, config.tasa]);
 
   const handleProductPriceCalc = (field: string, value: number) => {
-    const cost = productForm.costoPromedio || 0;
+    const cost = field === 'costoPromedio' ? value : (productForm.costoPromedio || 0);
     const tasa = config.tasa || 1;
     let newForm = { ...productForm };
 
-    if (field === 'utilidadPorcentaje') {
+    if (field === 'costoPromedio') {
+      newForm.costoPromedio = value;
+      const u = (newForm.utilidadPorcentaje || 0) / 100;
+      newForm.precio1 = u >= 1 ? cost : cost / (1 - u);
+    } else if (field === 'utilidadPorcentaje') {
       const u = value / 100;
       // Formula Markup sobre Venta: Precio = Costo / (1 - Utilidad%)
       const pUsd = u >= 1 ? cost : cost / (1 - u);
@@ -109,12 +110,13 @@ export function Modals({
       newForm.precio1 = pUsd;
     } else if (field === 'precio1') {
       const pUsd = value;
-      const u = pUsd > 0 ? ((pUsd - cost) / pUsd) * 100 : 0;
+      // Utilidad% = (1 - Costo/Precio) * 100
+      const u = pUsd > 0 ? (1 - (cost / pUsd)) * 100 : 0;
       newForm.precio1 = pUsd;
       newForm.utilidadPorcentaje = u;
     } else if (field === 'precioBs') {
       const pUsd = value / tasa;
-      const u = pUsd > 0 ? ((pUsd - cost) / pUsd) * 100 : 0;
+      const u = pUsd > 0 ? (1 - (cost / pUsd)) * 100 : 0;
       newForm.precio1 = pUsd;
       newForm.utilidadPorcentaje = u;
     }
@@ -164,7 +166,6 @@ export function Modals({
     onClose();
   };
 
-  // Lógica Compra
   const handlePagoMixto = (val: number, moneda: 'USD' | 'BS') => {
     const tasa = purchaseForm.tasa;
     if (moneda === 'USD') {
@@ -228,7 +229,6 @@ export function Modals({
         
         <div className="modal-body" onKeyDown={activeModal === 'modalProducto' ? handleMasterNav : undefined}>
           
-          {/* MODAL FICHA MAESTRA PRODUCTO */}
           {activeModal === 'modalProducto' && (
             <div className="space-y-6">
               <div className="win-window p-4 space-y-4">
@@ -293,7 +293,7 @@ export function Modals({
                 <div className="grid grid-cols-3 gap-4 mb-4">
                   <div className="form-group"><label>Costo Anterior:</label><input type="number" disabled value={productForm.costoAnterior || 0} className="bg-gray-200" /></div>
                   <div className="form-group"><label>Costo Actual:</label><input type="number" value={productForm.costoActual || 0} onChange={e => setProductForm({...productForm, costoActual: parseFloat(e.target.value) || 0})} /></div>
-                  <div className="form-group"><label>Costo Promedio (CPP):</label><input type="number" value={productForm.costoPromedio || 0} onChange={e => setProductForm({...productForm, costoPromedio: parseFloat(e.target.value) || 0})} className="font-bold border-blue-500" /></div>
+                  <div className="form-group"><label>Costo Promedio (CPP):</label><input type="number" value={productForm.costoPromedio || 0} onChange={e => handleProductPriceCalc('costoPromedio', parseFloat(e.target.value) || 0)} className="font-bold border-blue-500" /></div>
                 </div>
 
                 <div className="p-4 border-2 border-blue-400 bg-white rounded shadow-inner">
@@ -356,7 +356,6 @@ export function Modals({
             </div>
           )}
 
-          {/* MODAL ENTRADA POR COMPRA (EL SOLICITADO) */}
           {activeModal === 'modalEntrada' && (
             <div className="space-y-6">
               <div className="win-window p-4">
