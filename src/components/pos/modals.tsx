@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Product, Client, Sale, Account, CartItem, Presupuesto, User, InventoryMovement, KitComponent } from '@/types/pos';
 import { v4 as uuidv4 } from 'uuid';
 import { Wallet, Printer, Download, Plus, Search, Trash2, Save, CreditCard, Minus } from 'lucide-react';
@@ -42,6 +42,11 @@ export function Modals({
   const [unidades, setUnidades] = useState(['Unidad', 'Kilo', 'Litro', 'Caja', 'Galón', 'Par']);
   const [categorias, setCategorias] = useState(['Repuesto', 'Lubricante', 'Servicio', 'Accesorio', 'Frenos', 'Motor']);
   const [departamentos, setDepartamentos] = useState(['Almacén Principal', 'Tienda', 'Servicios']);
+
+  // Refs para navegación de teclado
+  const methodRef = useRef<HTMLSelectElement>(null);
+  const amountRef = useRef<HTMLInputElement>(null);
+  const addBtnRef = useRef<HTMLButtonElement>(null);
 
   // --- PRODUCT FORM STATE ---
   const initialProduct: Product = {
@@ -90,6 +95,7 @@ export function Modals({
     
     if (activeModal === 'modalProcesar') {
       setPaymentState({ method: 'Efectivo USD', amount: 0, payments: [], totalPaidUsd: 0 });
+      setTimeout(() => methodRef.current?.focus(), 100);
     }
   }, [activeModal, editingId, products]);
 
@@ -149,6 +155,25 @@ export function Modals({
     return Math.round((subtotal + totalIva) * 100) / 100;
   };
 
+  const addPayment = () => {
+    if (paymentState.amount <= 0) return;
+    const totalUsdToPay = getCartTotal();
+    let usd = 0; let bs = 0;
+    if (paymentState.method.includes('USD')) {
+      usd = paymentState.amount; bs = Math.round(usd * config.tasa * 100) / 100;
+    } else {
+      bs = paymentState.amount; usd = Math.round((bs / config.tasa) * 100) / 100;
+    }
+    const newPayments = [...paymentState.payments, { method: paymentState.method, usd, bs }];
+    setPaymentState({
+      ...paymentState,
+      payments: newPayments,
+      totalPaidUsd: Math.round(newPayments.reduce((acc, p) => acc + p.usd, 0) * 100) / 100,
+      amount: 0
+    });
+    methodRef.current?.focus();
+  };
+
   const finalizeSale = () => {
     const totalUsd = getCartTotal();
     const sale: Sale = {
@@ -171,18 +196,15 @@ export function Modals({
       estado: 'Completada'
     };
 
-    // LOGICA DE DESCUENTO DE STOCK (INCLUYENDO KITS VIRTUALES)
     const updatedProducts = [...products];
     cart.forEach(item => {
       const product = updatedProducts[item.productIndex];
       if (product.isKit && !product.stockPropio) {
-        // Kit Virtual: Descontar componentes
         product.kitComponents.forEach(comp => {
           const compProd = updatedProducts[comp.productIndex];
           if (compProd) compProd.stock -= (comp.cantidad * item.cantidad);
         });
       } else {
-        // Producto Normal o Kit con Stock Propio
         product.stock -= item.cantidad;
       }
     });
@@ -202,7 +224,6 @@ export function Modals({
 
     if (isNew) {
       updated.push(finalProduct);
-      // Registrar movimiento inicial en Kardex
       if (stockInicial > 0) {
         const movement: InventoryMovement = {
           id: uuidv4(),
@@ -228,6 +249,15 @@ export function Modals({
     onClose();
   };
 
+  const handleCalculatorKeyDown = (e: React.KeyboardEvent, field: string) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (field === 'method') amountRef.current?.focus();
+      if (field === 'amount') addBtnRef.current?.focus();
+      if (field === 'add') addPayment();
+    }
+  };
+
   if (!activeModal && !lastSale) return null;
 
   return (
@@ -242,8 +272,6 @@ export function Modals({
             </div>
             <div className="modal-body max-h-[80vh] overflow-y-auto">
               <div className="grid grid-cols-3 gap-6">
-                
-                {/* Panel Identificación */}
                 <div className="win-window p-4 space-y-3">
                   <h3 className="text-blue-800 font-bold border-b border-gray-400 pb-1 mb-2">IDENTIFICACIÓN</h3>
                   <div className="form-group">
@@ -267,7 +295,6 @@ export function Modals({
                   </div>
                 </div>
 
-                {/* Panel Atributos */}
                 <div className="win-window p-4 space-y-3">
                   <h3 className="text-blue-800 font-bold border-b border-gray-400 pb-1 mb-2">ATRIBUTOS</h3>
                   <div className="form-group">
@@ -306,7 +333,6 @@ export function Modals({
                   </div>
                 </div>
 
-                {/* Panel Precios */}
                 <div className="win-window p-4 space-y-3 bg-gray-100">
                   <h3 className="text-green-800 font-bold border-b border-gray-400 pb-1 mb-2">LOGICA FINANCIERA</h3>
                   <div className="form-group">
@@ -360,7 +386,6 @@ export function Modals({
                 </div>
               </div>
 
-              {/* Secciones Adicionales */}
               <div className="grid grid-cols-2 gap-6 mt-6">
                 <div className="win-window p-4 space-y-4">
                   <h3 className="text-indigo-800 font-bold mb-2">STOCK Y TIPO</h3>
@@ -404,7 +429,6 @@ export function Modals({
                 </div>
               </div>
 
-              {/* SECCION COMPONENTES KIT VIRTUAL */}
               {productForm.isKit && !productForm.stockPropio && (
                 <div className="win-window p-4 mt-6 animate-in slide-in-from-top-4">
                   <h3 className="text-blue-800 font-bold mb-4 border-b">COMPONENTES DEL KIT VIRTUAL (Se descuentan del inventario)</h3>
@@ -470,7 +494,6 @@ export function Modals({
           </div>
         )}
 
-        {/* MODAL ENTRADA COMPRA */}
         {activeModal === 'modalEntrada' && (
           <div className="modal-window xlarge" onClick={e => e.stopPropagation()}>
             <div className="modal-titlebar">
@@ -577,7 +600,6 @@ export function Modals({
           </div>
         )}
 
-        {/* MODAL CALCULADORA DE PAGO */}
         {activeModal === 'modalProcesar' && (
           <div className="modal-window" onClick={e => e.stopPropagation()} style={{ width: '450px' }}>
             <div className="modal-titlebar">
@@ -585,7 +607,7 @@ export function Modals({
               <span className="modal-close" onClick={onClose}>✕</span>
             </div>
             <div className="modal-body space-y-4">
-              <div className="win-window p-4 bg-black text-yellow-400 text-center space-y-2">
+              <div className="win-window p-4 bg-gray-200 text-black text-center space-y-2 border-none">
                 <div className="text-sm font-bold opacity-70">TOTAL A CANCELAR</div>
                 <div className="text-4xl font-black">${getCartTotal().toFixed(2)}</div>
                 <div className="text-sm opacity-80">Equiv. Bs. {(getCartTotal() * config.tasa).toFixed(2)}</div>
@@ -594,8 +616,10 @@ export function Modals({
               <div className="form-group">
                 <label>Método de Pago:</label>
                 <select 
+                  ref={methodRef}
                   value={paymentState.method} 
                   onChange={e => setPaymentState({...paymentState, method: e.target.value})}
+                  onKeyDown={e => handleCalculatorKeyDown(e, 'method')}
                   className="win-input h-10 w-full"
                 >
                   <option>Efectivo USD</option>
@@ -611,28 +635,22 @@ export function Modals({
                 <div className="form-group flex-1">
                   <label>Monto a Liquidar ({paymentState.method.includes('USD') ? 'USD' : 'Bs'}):</label>
                   <input 
+                    ref={amountRef}
                     type="number" 
                     value={paymentState.amount} 
                     onChange={e => setPaymentState({...paymentState, amount: parseFloat(e.target.value) || 0})}
+                    onKeyDown={e => handleCalculatorKeyDown(e, 'amount')}
                     className="win-input h-10 w-full text-right font-bold text-lg"
                   />
                 </div>
-                <button className="btn btn-primary mt-6 px-4" onClick={() => {
-                  const totalUsd = getCartTotal();
-                  let usd = 0; let bs = 0;
-                  if (paymentState.method.includes('USD')) {
-                    usd = paymentState.amount; bs = Math.round(usd * config.tasa * 100) / 100;
-                  } else {
-                    bs = paymentState.amount; usd = Math.round((bs / config.tasa) * 100) / 100;
-                  }
-                  const newPayments = [...paymentState.payments, { method: paymentState.method, usd, bs }];
-                  setPaymentState({
-                    ...paymentState,
-                    payments: newPayments,
-                    totalPaidUsd: Math.round(newPayments.reduce((acc, p) => acc + p.usd, 0) * 100) / 100,
-                    amount: 0
-                  });
-                }}>➕ Añadir</button>
+                <button 
+                  ref={addBtnRef}
+                  className="btn btn-primary mt-6 px-4" 
+                  onKeyDown={e => handleCalculatorKeyDown(e, 'add')}
+                  onClick={addPayment}
+                >
+                  ➕ Añadir
+                </button>
               </div>
 
               <div className="table-responsive" style={{ maxHeight: '120px' }}>
@@ -659,18 +677,21 @@ export function Modals({
                 </table>
               </div>
 
-              <div className="win-window p-3 bg-gray-200">
+              <div className="win-window p-3 bg-gray-200 border-none">
                 <div className="flex justify-between font-bold text-xs">
                   <span>TOTAL PAGADO:</span>
                   <span>${paymentState.totalPaidUsd.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between font-black text-lg mt-1" style={{ color: paymentState.totalPaidUsd >= getCartTotal() ? 'green' : 'red' }}>
+                <div className="flex justify-between font-black text-lg mt-1 text-black">
                   <span>{paymentState.totalPaidUsd >= getCartTotal() ? 'VUELTO:' : 'FALTA:'}</span>
-                  <span>${Math.abs(Math.round((paymentState.totalPaidUsd - getCartTotal()) * 100) / 100).toFixed(2)}</span>
+                  <div className="text-right">
+                    <div>${Math.abs(Math.round((paymentState.totalPaidUsd - getCartTotal()) * 100) / 100).toFixed(2)}</div>
+                    <div className="text-[10px] opacity-60">Bs {Math.abs(Math.round((paymentState.totalPaidUsd - getCartTotal()) * config.tasa * 100) / 100).toFixed(2)}</div>
+                  </div>
                 </div>
               </div>
 
-              <div className="modal-footer">
+              <div className="modal-footer border-none">
                 <button className="btn w-full" onClick={onClose}>Cancelar</button>
                 {paymentState.totalPaidUsd >= getCartTotal() && (
                   <button className="btn btn-success w-full h-12 text-lg" onClick={finalizeSale}>
@@ -682,7 +703,6 @@ export function Modals({
           </div>
         )}
 
-        {/* MODAL TICKET / COMPROBANTE */}
         {lastSale && (
           <div className="modal-window" onClick={e => e.stopPropagation()} style={{ width: '350px' }}>
             <div className="modal-titlebar">
