@@ -16,7 +16,7 @@ import { UsersModule } from '@/components/pos/users-module';
 import { Modals } from '@/components/pos/modals';
 import { Product, Client, Provider, Sale, Account, CartItem, Presupuesto, User, InventoryMovement, ReportZRecord } from '@/types/pos';
 
-const DB_KEY = 'autoparts_pos_db_v3';
+const DB_KEY = 'autoparts_pos_db_v5';
 
 export default function POSPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -58,6 +58,16 @@ export default function POSPage() {
   // Initialization - Load from LocalStorage
   useEffect(() => {
     const saved = localStorage.getItem(DB_KEY);
+    const adminUser = { 
+      id: '1', 
+      username: 'Admin', 
+      password: '123', 
+      name: 'Administrador', 
+      email: 'admin@sistema.com', 
+      role: 'Administrador' as const, 
+      active: true 
+    };
+
     if (saved) {
       try {
         const data = JSON.parse(saved);
@@ -67,17 +77,20 @@ export default function POSPage() {
         if (data.sales) setSales(data.sales);
         if (data.accounts) setAccounts(data.accounts);
         if (data.presupuestos) setPresupuestos(data.presupuestos);
-        if (data.users) setUsers(data.users);
+        if (data.users && data.users.length > 0) {
+          setUsers(data.users);
+        } else {
+          setUsers([adminUser]);
+        }
         if (data.config) setConfig(data.config);
         if (data.movements) setMovements(data.movements);
         if (data.reportsZ) setReportsZ(data.reportsZ);
       } catch (error) {
         console.error("Error parsing local database:", error);
+        setUsers([adminUser]);
       }
     } else {
-      setUsers([
-        { id: '1', username: 'Admin', password: '123', name: 'Administrador', email: 'admin@sistema.com', role: 'Administrador', active: true }
-      ]);
+      setUsers([adminUser]);
     }
     setIsLoaded(true);
   }, []);
@@ -92,11 +105,13 @@ export default function POSPage() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    // Búsqueda flexible para evitar errores por datos antiguos
     const user = users.find(u => 
-      u.email?.toLowerCase() === loginData.email.toLowerCase() &&
-      u.username.toLowerCase() === loginData.username.toLowerCase() && 
+      (u.email || "").toLowerCase().trim() === loginData.email.toLowerCase().trim() &&
+      (u.username || "").toLowerCase().trim() === loginData.username.toLowerCase().trim() && 
       u.password === loginData.password
     );
+
     if (user) {
       setIsLoggedIn(true);
       notify(`Bienvenido, ${user.name}`);
@@ -131,15 +146,34 @@ export default function POSPage() {
           <form onSubmit={handleLogin}>
             <div className="form-group">
               <label>Email:</label>
-              <input type="email" required value={loginData.email} onChange={e => setLoginData({...loginData, email: e.target.value})} autoFocus />
+              <input 
+                type="email" 
+                required 
+                value={loginData.email} 
+                onChange={e => setLoginData({...loginData, email: e.target.value})} 
+                placeholder="admin@sistema.com"
+                autoFocus 
+              />
             </div>
             <div className="form-group">
               <label>Usuario:</label>
-              <input type="text" required value={loginData.username} onChange={e => setLoginData({...loginData, username: e.target.value})} />
+              <input 
+                type="text" 
+                required 
+                value={loginData.username} 
+                onChange={e => setLoginData({...loginData, username: e.target.value})} 
+                placeholder="Admin"
+              />
             </div>
             <div className="form-group">
               <label>Contraseña:</label>
-              <input type="password" required value={loginData.password} onChange={e => setLoginData({...loginData, password: e.target.value})} />
+              <input 
+                type="password" 
+                required 
+                value={loginData.password} 
+                onChange={e => setLoginData({...loginData, password: e.target.value})} 
+                placeholder="123"
+              />
             </div>
             <div style={{ marginTop: '20px', textAlign: 'right' }}>
               <button type="submit" className="btn btn-primary">Entrar</button>
