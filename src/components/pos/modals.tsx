@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Product, Client, Provider, Sale, Account, CartItem, Presupuesto, User, InventoryMovement } from '@/types/pos';
 import { v4 as uuidv4 } from 'uuid';
-import { Wallet, Printer, Download, Plus, Search, Trash2, Save, CreditCard, ChevronRight } from 'lucide-react';
+import { Wallet, Printer, Download, Plus, Search, Trash2, Save, CreditCard, ChevronRight, User as UserIcon } from 'lucide-react';
 
 interface ModalsProps {
   activeModal: string | null;
@@ -61,6 +61,12 @@ export function Modals({
   const [productForm, setProductForm] = useState<Product>(initialProduct);
   const [stockInicial, setStockInicial] = useState(0);
 
+  // --- CLIENT FORM ---
+  const initialClient: Client = {
+    tipoRif: 'V', rifNum: '', nombre: '', telefono: '', email: '', direccion: '', tipo: 'Detal', credito: 0, saldo: 0
+  };
+  const [clientForm, setClientForm] = useState<Client>(initialClient);
+
   // --- PROVIDER FORM ---
   const initialProvider: Provider = { id: '', rif: '', nombre: '', direccion: '', contacto: '', telefono: '' };
   const [providerForm, setProviderForm] = useState<Provider>(initialProvider);
@@ -70,8 +76,6 @@ export function Modals({
     proveedorId: '', nroFactura: '', tasa: config.tasa, tipo: 'Contado' as 'Contado' | 'Credito' | 'Mixto', 
     diasCredito: 0, pagoContadoUsd: 0, pagoContadoBs: 0, items: [] as any[]
   });
-  const [purchaseSearch, setPurchaseSearch] = useState('');
-  const [purchaseResults, setPurchaseResults] = useState<Product[]>([]);
 
   // --- PAYMENT CALCULATOR ---
   const [paymentState, setPaymentState] = useState({
@@ -95,6 +99,13 @@ export function Modals({
       setStockInicial(0);
     }
 
+    if (activeModal === 'modalCliente' && editingId !== null) {
+      const cli = clients[editingId];
+      if (cli) setClientForm({ ...cli });
+    } else if (activeModal === 'modalCliente') {
+      setClientForm(initialClient);
+    }
+
     if (activeModal === 'modalProveedor' && editingId !== null) {
       const prov = providers.find(p => p.id === editingId);
       if (prov) setProviderForm({ ...prov });
@@ -106,11 +117,32 @@ export function Modals({
       setPaymentState({ method: 'Efectivo USD', amount: 0, payments: [], totalPaidUsd: 0 });
       setTimeout(() => methodRef.current?.focus(), 100);
     }
+  }, [activeModal, editingId, products, clients, providers, config.tasa]);
 
-    if (activeModal === 'modalEntrada') {
-      setPurchaseForm(prev => ({ ...prev, tasa: config.tasa }));
+  const handleSaveClient = () => {
+    if (!clientForm.rifNum || !clientForm.nombre) {
+      notify('❌ Cédula/RIF y Nombre son obligatorios', 'error');
+      return;
     }
-  }, [activeModal, editingId, products, providers, config.tasa]);
+    
+    let updatedClients = [...clients];
+    const isNew = editingId === null;
+
+    if (isNew) {
+      // Validar duplicado
+      if (clients.some(c => c.rifNum === clientForm.rifNum)) {
+        notify('❌ Este número de identificación ya existe', 'error');
+        return;
+      }
+      updatedClients.push(clientForm);
+    } else {
+      updatedClients[editingId] = clientForm;
+    }
+
+    setClients(updatedClients);
+    notify(`✅ Cliente ${isNew ? 'creado' : 'actualizado'} correctamente`);
+    onClose();
+  };
 
   const handleProductPriceCalc = (field: string, val: number) => {
     let newForm = { ...productForm };
@@ -145,7 +177,6 @@ export function Modals({
 
     if (isNew) {
       updatedProducts.push(productForm);
-      // Generar movimiento de Kardex Inicial
       if (stockInicial > 0) {
         setMovements(prev => [...prev, {
           id: uuidv4(),
@@ -167,77 +198,6 @@ export function Modals({
 
     setProducts(updatedProducts);
     notify(`✅ Producto ${isNew ? 'creado' : 'actualizado'} correctamente`);
-    onClose();
-  };
-
-  const processPurchase = () => {
-    if (purchaseForm.items.length === 0) {
-      notify('❌ Debe agregar al menos un producto', 'error');
-      return;
-    }
-
-    const provider = providers.find(p => p.id === purchaseForm.proveedorId);
-    if (!provider) {
-      notify('❌ Seleccione un proveedor válido', 'error');
-      return;
-    }
-    
-    const updatedProducts = [...products];
-    const newMovements: InventoryMovement[] = [...movements];
-    const totalPurchase = purchaseForm.items.reduce((acc, it) => acc + (it.cantidad * it.costo), 0);
-
-    purchaseForm.items.forEach(item => {
-      const p = updatedProducts[item.productIndex];
-      const stockAnterior = p.stock;
-      const cppAnterior = p.costoPromedio;
-      const nuevoCpp = ((stockAnterior * cppAnterior) + (item.cantidad * item.costo)) / (stockAnterior + item.cantidad);
-      
-      p.costoAnterior = p.costoActual;
-      p.costoActual = item.costo;
-      p.costoPromedio = Math.round(nuevoCpp * 100) / 100;
-      p.stock += item.cantidad;
-      p.precio1 = p.utilidadPorcentaje >= 100 ? p.costoPromedio : Math.round((p.costoPromedio / (1 - p.utilidadPorcentaje/100)) * 100) / 100;
-
-      newMovements.push({
-        id: uuidv4(),
-        fecha: new Date().toISOString(),
-        codigoProducto: p.codigo,
-        tipo: 'ENTRADA',
-        cantidad: item.cantidad,
-        stockPrevio: stockAnterior,
-        stockNuevo: p.stock,
-        costo: item.costo,
-        referencia: purchaseForm.nroFactura || 'COMPRA',
-        comentario: `Entrada por compra a ${provider.nombre}`,
-        usuario: config.vendedor
-      });
-    });
-
-    if (purchaseForm.tipo !== 'Contado') {
-      const amountPaid = purchaseForm.tipo === 'Mixto' ? purchaseForm.pagoContadoUsd : 0;
-      const pending = totalPurchase - amountPaid;
-      
-      if (pending > 0) {
-        setAccounts(prev => [...prev, {
-          id: uuidv4(),
-          entidad: provider.nombre,
-          montoTotal: totalPurchase,
-          montoPagado: amountPaid,
-          fechaEmision: new Date().toISOString(),
-          estado: amountPaid > 0 ? 'Parcial' : 'Pendiente',
-          referencia: purchaseForm.nroFactura || 'COMPRA',
-          tipo: 'CXP'
-        }]);
-      }
-    }
-
-    setProducts(updatedProducts);
-    setMovements(newMovements);
-    setPurchaseForm({
-      proveedorId: '', nroFactura: '', tasa: config.tasa, tipo: 'Contado', 
-      diasCredito: 0, pagoContadoUsd: 0, pagoContadoBs: 0, items: []
-    });
-    notify('✅ Recepción de mercancía procesada correctamente');
     onClose();
   };
 
@@ -268,10 +228,7 @@ export function Modals({
 
     cart.forEach(item => {
       const product = updatedProducts[item.productIndex];
-      
-      // Lógica de Descuento de Stock
       if (product.isKit && !product.stockPropio) {
-        // Kit Virtual: Descontar componentes
         product.kitComponents.forEach(comp => {
           const compProd = updatedProducts[comp.productIndex];
           if (compProd) {
@@ -293,7 +250,6 @@ export function Modals({
           }
         });
       } else {
-        // Producto Normal o Kit con Stock Propio
         const stockPrev = product.stock;
         product.stock -= item.cantidad;
         newMovements.push({
@@ -336,15 +292,10 @@ export function Modals({
 
   const handleSetPagoExacto = () => {
     const totalUsd = cart.reduce((acc, item) => acc + (item.precioUsd * item.cantidad * (1 + item.iva / 100)), 0);
-    const totalPaidUsd = paymentState.totalPaidUsd;
-    const missingUsd = Math.max(0, totalUsd - totalPaidUsd);
-    
+    const missingUsd = Math.max(0, totalUsd - paymentState.totalPaidUsd);
     const isUsdMethod = paymentState.method === 'Efectivo USD' || paymentState.method === 'Zelle';
-    if (isUsdMethod) {
-      setPaymentState(prev => ({ ...prev, amount: Math.round(missingUsd * 100) / 100 }));
-    } else {
-      setPaymentState(prev => ({ ...prev, amount: Math.round(missingUsd * config.tasa * 100) / 100 }));
-    }
+    if (isUsdMethod) { setPaymentState(prev => ({ ...prev, amount: Math.round(missingUsd * 100) / 100 })); } 
+    else { setPaymentState(prev => ({ ...prev, amount: Math.round(missingUsd * config.tasa * 100) / 100 })); }
   };
 
   if (!activeModal && !lastSale) return null;
@@ -356,6 +307,84 @@ export function Modals({
   return (
     <div className={`modal-overlay ${activeModal || lastSale ? 'active' : ''}`} onClick={() => { if(!lastSale) onClose(); else setLastSale(null); }}>
       
+      {activeModal === 'modalCliente' && (
+        <div className="modal-window large" onClick={e => e.stopPropagation()}>
+          <div className="modal-titlebar">
+            <span>👤 FICHA MAESTRA DE CLIENTE</span>
+            <span className="modal-close" onClick={onClose}>✕</span>
+          </div>
+          <div className="modal-body">
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="settings-section">
+                  <h3>Identificación</h3>
+                  <div className="form-row">
+                    <div className="form-group" style={{ width: '80px' }}>
+                      <label>Tipo:</label>
+                      <select value={clientForm.tipoRif} onChange={e => setClientForm({...clientForm, tipoRif: e.target.value})} className="win-input">
+                        <option value="V">V</option>
+                        <option value="J">J</option>
+                        <option value="G">G</option>
+                        <option value="E">E</option>
+                        <option value="P">P</option>
+                      </select>
+                    </div>
+                    <div className="form-group flex-1">
+                      <label>Cédula / RIF:</label>
+                      <input type="text" value={clientForm.rifNum} onChange={e => setClientForm({...clientForm, rifNum: e.target.value})} className="win-input font-bold" />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label>Nombre o Razón Social:</label>
+                    <input type="text" value={clientForm.nombre} onChange={e => setClientForm({...clientForm, nombre: e.target.value})} className="win-input" />
+                  </div>
+                </div>
+
+                <div className="settings-section">
+                  <h3>Contacto</h3>
+                  <div className="form-group">
+                    <label>Teléfono:</label>
+                    <input type="text" value={clientForm.telefono} onChange={e => setClientForm({...clientForm, telefono: e.target.value})} className="win-input" />
+                  </div>
+                  <div className="form-group">
+                    <label>Correo Electrónico:</label>
+                    <input type="email" value={clientForm.email} onChange={e => setClientForm({...clientForm, email: e.target.value})} className="win-input" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="settings-section">
+                  <h3>Dirección Fiscal</h3>
+                  <textarea value={clientForm.direccion} onChange={e => setClientForm({...clientForm, direccion: e.target.value})} className="win-input" style={{ height: '80px' }} />
+                </div>
+
+                <div className="settings-section">
+                  <h3>Configuración Comercial</h3>
+                  <div className="form-group">
+                    <label>Tipo de Cliente:</label>
+                    <select value={clientForm.tipo} onChange={e => setClientForm({...clientForm, tipo: e.target.value})} className="win-input">
+                      <option value="Detal">Detal (Normal)</option>
+                      <option value="Mayor">Mayorista</option>
+                      <option value="VIP">VIP / Especial</option>
+                      <option value="Exento">Contribuyente Exento</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Límite de Crédito (USD):</label>
+                    <input type="number" value={clientForm.credito} onChange={e => setClientForm({...clientForm, credito: parseFloat(e.target.value) || 0})} className="win-input" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button className="btn" onClick={onClose}>Cancelar</button>
+            <button className="btn btn-primary" onClick={handleSaveClient}>💾 GUARDAR CLIENTE</button>
+          </div>
+        </div>
+      )}
+
       {activeModal === 'modalProcesar' && (
         <div className="modal-window" onClick={e => e.stopPropagation()} style={{ width: '420px' }}>
           <div className="modal-titlebar">
@@ -600,66 +629,6 @@ export function Modals({
           <div className="modal-footer">
             <button className="btn" onClick={onClose}>Cancelar</button>
             <button className="btn btn-primary" onClick={handleSaveProduct}>💾 GUARDAR PRODUCTO</button>
-          </div>
-        </div>
-      )}
-
-      {activeModal === 'modalAjuste' && (
-        <div className="modal-window" onClick={e => e.stopPropagation()} style={{ width: '400px' }}>
-          <div className="modal-titlebar">
-            <span>🔧 AJUSTE MANUAL DE INVENTARIO</span>
-            <span className="modal-close" onClick={onClose}>✕</span>
-          </div>
-          <div className="modal-body space-y-4">
-            <div className="form-group">
-              <label>Producto a Ajustar:</label>
-              <select id="adjProd" className="win-input">
-                {products.map((p, idx) => <option key={p.codigo} value={idx}>{p.codigo} - {p.nombre} (Stock: {p.stock})</option>)}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="form-group">
-                <label>Tipo Ajuste:</label>
-                <select id="adjTipo" className="win-input">
-                  <option value="ENTRADA">➕ Entrada (+)</option>
-                  <option value="SALIDA">➖ Salida (-)</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Cantidad:</label>
-                <input type="number" id="adjCant" className="win-input" min="1" defaultValue="1" />
-              </div>
-            </div>
-            <div className="form-group">
-              <label>Motivo del Ajuste:</label>
-              <textarea id="adjMotivo" className="win-input" placeholder="Ej: Mercancía dañada, error de conteo..." style={{ height: '60px' }} />
-            </div>
-          </div>
-          <div className="modal-footer">
-            <button className="btn" onClick={onClose}>Cancelar</button>
-            <button className="btn btn-primary" onClick={() => {
-              const idx = parseInt((document.getElementById('adjProd') as HTMLSelectElement).value);
-              const tipo = (document.getElementById('adjTipo') as HTMLSelectElement).value as any;
-              const cant = parseInt((document.getElementById('adjCant') as HTMLInputElement).value);
-              const motivo = (document.getElementById('adjMotivo') as HTMLTextAreaElement).value;
-              
-              const p = products[idx];
-              const stockPrev = p.stock;
-              const realCant = tipo === 'ENTRADA' ? cant : -cant;
-              
-              const updated = [...products];
-              updated[idx].stock += realCant;
-              setProducts(updated);
-              
-              setMovements([...movements, {
-                id: uuidv4(), fecha: new Date().toISOString(), codigoProducto: p.codigo, tipo: 'AJUSTE',
-                cantidad: realCant, stockPrevio: stockPrev, stockNuevo: updated[idx].stock,
-                costo: p.costoPromedio, referencia: 'AJUSTE MANUAL', comentario: motivo, usuario: config.vendedor
-              }]);
-              
-              notify('✅ Ajuste realizado correctamente');
-              onClose();
-            }}> APLICAR AJUSTE</button>
           </div>
         </div>
       )}
