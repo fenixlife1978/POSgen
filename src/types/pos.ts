@@ -142,3 +142,20 @@ export interface InventoryMovement {
   comentario: string;
   usuario: string;
 }
+
+export interface ReportZRecord {
+  id: string;
+  numero: number;
+  fecha: string;
+  vendedor: string;
+  facturaInicio: string;
+  facturaFin: string;
+  ventaBruta: number;
+  ventaNeta: number;
+  ivaTotal: number;
+  igtfTotal: number;
+  exentoTotal: number;
+  anulaciones: number;
+  grandTotalAcumulado: number;
+  desglosePagos: { method: string, usd: number, bs: number }[];
+}

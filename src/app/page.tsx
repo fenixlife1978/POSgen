@@ -14,9 +14,9 @@ import { ConfigModule } from '@/components/pos/config-module';
 import { AccountsModule } from '@/components/pos/accounts-module';
 import { UsersModule } from '@/components/pos/users-module';
 import { Modals } from '@/components/pos/modals';
-import { Product, Client, Provider, Sale, Account, CartItem, Presupuesto, User, InventoryMovement } from '@/types/pos';
+import { Product, Client, Provider, Sale, Account, CartItem, Presupuesto, User, InventoryMovement, ReportZRecord } from '@/types/pos';
 
-const DB_KEY = 'autoparts_pos_db_v2';
+const DB_KEY = 'autoparts_pos_db_v3';
 
 export default function POSPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -34,6 +34,7 @@ export default function POSPage() {
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
+  const [reportsZ, setReportsZ] = useState<ReportZRecord[]>([]);
   const [posCart, setPosCart] = useState<CartItem[]>([]);
   const [selectedRow, setSelectedRow] = useState(-1);
   const [editingId, setEditingId] = useState<any>(null);
@@ -43,15 +44,18 @@ export default function POSPage() {
     igtf: 3,
     iva: 16,
     rifEmpresa: 'J-12345678-9',
-    nombreEmpresa: 'SISTEMA POS REAL',
-    direccion: 'Av. Principal',
+    nombreEmpresa: 'AUTOPARTS POS PRO',
+    direccion: 'Av. Principal Local 10, Caracas',
     telefono: '0412-0000000',
     vendedor: 'ADMIN',
-    vVendedores: ['ADMIN'],
-    nextInvoice: 1,
+    vVendedores: ['ADMIN', 'CAJERO 01', 'CAJERO 02'],
+    reportZCounter: 1,
+    grandTotalHistory: 0,
+    lastZDate: null as string | null,
+    terminalId: 'CAJA-01'
   });
 
-  // Initialization - Load from LocalStorage safely
+  // Initialization - Load from LocalStorage
   useEffect(() => {
     const saved = localStorage.getItem(DB_KEY);
     if (saved) {
@@ -66,11 +70,11 @@ export default function POSPage() {
         if (data.users) setUsers(data.users);
         if (data.config) setConfig(data.config);
         if (data.movements) setMovements(data.movements);
+        if (data.reportsZ) setReportsZ(data.reportsZ);
       } catch (error) {
         console.error("Error parsing local database:", error);
       }
     } else {
-      // Default users if first time
       setUsers([
         { id: '1', username: 'Admin', password: '123', name: 'Administrador', email: 'admin@sistema.com', role: 'Administrador', active: true }
       ]);
@@ -78,19 +82,19 @@ export default function POSPage() {
     setIsLoaded(true);
   }, []);
 
-  // Save to LocalStorage safely only after load
+  // Save to LocalStorage
   useEffect(() => {
     if (isLoaded) {
-      const data = { products, clients, providers, sales, accounts, presupuestos, users, config, movements };
+      const data = { products, clients, providers, sales, accounts, presupuestos, users, config, movements, reportsZ };
       localStorage.setItem(DB_KEY, JSON.stringify(data));
     }
-  }, [products, clients, providers, sales, accounts, presupuestos, users, config, movements, isLoaded]);
+  }, [products, clients, providers, sales, accounts, presupuestos, users, config, movements, reportsZ, isLoaded]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     const user = users.find(u => 
+      u.email?.toLowerCase() === loginData.email.toLowerCase() &&
       u.username.toLowerCase() === loginData.username.toLowerCase() && 
-      u.email.toLowerCase() === loginData.email.toLowerCase() &&
       u.password === loginData.password
     );
     if (user) {
@@ -181,7 +185,7 @@ export default function POSPage() {
         <ProvidersModule active={activeModule === 'proveedores'} onOpenModal={openModal} providers={providers} setProviders={setProviders} notify={notify} />
         <SalesModule active={activeModule === 'ventas'} sales={sales} setSales={setSales} products={products} setProducts={setProducts} movements={movements} setMovements={setMovements} notify={notify} onOpenModal={openModal} config={config} />
         <InventoryModule active={activeModule === 'inventario'} onOpenModal={openModal} products={products} movements={movements} />
-        <ReportsModule active={activeModule === 'reportes'} sales={sales} products={products} clients={clients} config={config} />
+        <ReportsModule active={activeModule === 'reportes'} sales={sales} products={products} clients={clients} config={config} setConfig={setConfig} setReportsZ={setReportsZ} reportsZ={reportsZ} />
         <AccountsModule active={activeModule === 'cuentas'} accounts={accounts} movements={movements} />
         <UsersModule active={activeModule === 'usuarios'} users={users} setUsers={setUsers} onOpenModal={openModal} notify={notify} />
         <ConfigModule active={activeModule === 'config'} onOpenModal={openModal} config={config} setConfig={setConfig} notify={notify} />
