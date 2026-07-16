@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Product, Client, Provider, Sale, Account, CartItem, Presupuesto, User, InventoryMovement } from '@/types/pos';
 import { v4 as uuidv4 } from 'uuid';
-import { Wallet, Printer, Download, Plus, Search, Trash2, Save, CreditCard, ChevronRight, User as UserIcon } from 'lucide-react';
+import { Wallet, Printer, Download, Plus, Search, Trash2, Save, CreditCard, ChevronRight, User as UserIcon, PackagePlus } from 'lucide-react';
 
 interface ModalsProps {
   activeModal: string | null;
@@ -76,7 +76,7 @@ export function Modals({
   const [providerForm, setProviderForm] = useState<Provider>(initialProvider);
 
   const [entradaForm, setEntradaForm] = useState({
-    proveedor: '', rif: '', nroFactura: '', tasa: config.tasa, credito: false, items: [] as any[]
+    proveedor: '', rif: '', nroFactura: '', tasa: config.tasa, tipoCompra: 'Contado', diasCredito: 0, pagoContadoUsd: 0, pagoContadoBs: 0, items: [] as any[]
   });
   const [entradaSearch, setEntradaSearch] = useState('');
   const [entradaDropdown, setEntradaDropdown] = useState<Product[]>([]);
@@ -142,7 +142,7 @@ export function Modals({
     }
 
     if (activeModal === 'modalEntrada') {
-      setEntradaForm({ proveedor: '', rif: '', nroFactura: '', tasa: config.tasa, credito: false, items: [] });
+      setEntradaForm({ proveedor: '', rif: '', nroFactura: '', tasa: config.tasa, tipoCompra: 'Contado', diasCredito: 0, pagoContadoUsd: 0, pagoContadoBs: 0, items: [] });
     }
 
     if (activeModal === 'modalAjuste') {
@@ -277,7 +277,7 @@ export function Modals({
   const handleEntradaSearch = (q: string) => {
     setEntradaSearch(q);
     if (!q) { setEntradaDropdown([]); return; }
-    setEntradaDropdown(products.filter(p => !p.isService && (p.codigo.toLowerCase().includes(q.toLowerCase()) || p.nombre.toLowerCase().includes(q.toLowerCase()))).slice(0, 5));
+    setEntradaDropdown(products.filter(p => !p.isService && (p.codigo.toLowerCase().includes(q.toLowerCase()) || p.nombre.toLowerCase().includes(q.toLowerCase()))).slice(0, 8));
   };
 
   const addToEntrada = (p: Product) => {
@@ -290,10 +290,13 @@ export function Modals({
   };
 
   const processEntrada = () => {
+    const totalFactura = entradaForm.items.reduce((s, i) => s + i.subtotal, 0);
+    const montoPendiente = totalFactura - (entradaForm.pagoContadoUsd + (entradaForm.pagoContadoBs / entradaForm.tasa));
+
     if (!entradaForm.nroFactura || entradaForm.items.length === 0) { notify('Faltan datos de factura o items', 'warning'); return; }
+    
     const updatedProducts = [...products];
     const newMovements: InventoryMovement[] = [];
-    let totalFactura = 0;
 
     entradaForm.items.forEach(item => {
       const idx = updatedProducts.findIndex(p => p.codigo === item.codigo);
@@ -307,7 +310,6 @@ export function Modals({
         p.costoActual = nuevoCosto;
         p.costoPromedio = Math.round(costoPromedio * 100) / 100;
         p.stock += nuevaCant;
-        totalFactura += (item.costo * item.cantidad);
 
         newMovements.push({
           id: uuidv4(),
@@ -325,11 +327,11 @@ export function Modals({
       }
     });
 
-    if (entradaForm.credito) {
+    if (entradaForm.tipoCompra !== 'Contado' && montoPendiente > 0) {
       setAccounts(prev => [...prev, {
         id: uuidv4(),
         entidad: entradaForm.proveedor || 'Proveedor Desconocido',
-        montoTotal: totalFactura,
+        montoTotal: montoPendiente,
         montoPagado: 0,
         fechaEmision: new Date().toLocaleDateString(),
         estado: 'Pendiente',
@@ -477,8 +479,9 @@ export function Modals({
   if (!activeModal && !lastSale && !viewSale) return null;
 
   const totalVentaUsd = cart.reduce((acc, item) => acc + (item.precioUsd * item.cantidad * (1 + item.iva / 100)), 0);
-  const faltanteUsd = Math.max(0, totalVentaUsd - paymentState.totalPaidUsd);
-  const vueltoUsd = Math.max(0, paymentState.totalPaidUsd - totalVentaUsd);
+  const totalEntradaUsd = entradaForm.items.reduce((s, i) => s + i.subtotal, 0);
+  const pagoRealizadoUsd = entradaForm.pagoContadoUsd + (entradaForm.pagoContadoBs / entradaForm.tasa);
+  const pendienteUsd = Math.max(0, totalEntradaUsd - pagoRealizadoUsd);
 
   return (
     <div className={`modal-overlay ${activeModal || lastSale || viewSale ? 'active' : ''}`} onClick={() => { if(!lastSale && !viewSale) onClose(); else { setLastSale(null); setViewSale(null); } }}>
@@ -522,59 +525,138 @@ export function Modals({
 
       {activeModal === 'modalEntrada' && (
         <div className="modal-window xlarge" onClick={e => e.stopPropagation()}>
-          <div className="modal-titlebar">
-            <span>📥 RECEPCIÓN DE MERCANCÍA / COMPRA</span>
+          <div className="win-titlebar">
+            <span>🚢 ENTRADA POR COMPRA (RECEPCIÓN)</span>
             <span className="modal-close" onClick={onClose}>✕</span>
           </div>
-          <div className="modal-body space-y-4">
-            <div className="grid grid-cols-3 gap-4">
-              <div className="form-group"><label>Proveedor:</label><input type="text" value={entradaForm.proveedor} onChange={e => setEntradaForm({...entradaForm, proveedor: e.target.value})} className="win-input" /></div>
-              <div className="form-group"><label>Nro Factura:</label><input type="text" value={entradaForm.nroFactura} onChange={e => setEntradaForm({...entradaForm, nroFactura: e.target.value})} className="win-input font-bold" /></div>
-              <div className="form-group"><label>Tasa Factura:</label><input type="number" step="0.01" value={entradaForm.tasa} onChange={e => setEntradaForm({...entradaForm, tasa: parseFloat(e.target.value) || 0})} className="win-input" /></div>
-            </div>
-            <div className="search-section relative">
-              <label>Añadir Item:</label>
-              <input type="text" value={entradaSearch} onChange={e => handleEntradaSearch(e.target.value)} className="win-input flex-1" placeholder="Buscar por código o nombre..." />
-              {entradaDropdown.length > 0 && (
-                <div className="search-dropdown active">
-                  {entradaDropdown.map(p => (
-                    <div key={p.codigo} className="search-dropdown-item" onClick={() => addToEntrada(p)}>
-                      <strong>{p.codigo}</strong> - {p.nombre} (Costo Actual: ${p.costoActual})
-                    </div>
-                  ))}
+          <div className="modal-body">
+            <div className="settings-section">
+              <div className="grid grid-cols-3 gap-6">
+                <div className="form-group">
+                  <label className="text-xs font-bold">Proveedor:</label>
+                  <input type="text" value={entradaForm.proveedor} onChange={e => setEntradaForm({...entradaForm, proveedor: e.target.value})} className="win-input h-10" />
                 </div>
-              )}
+                <div className="form-group">
+                  <label className="text-xs font-bold">Nro Factura:</label>
+                  <input type="text" value={entradaForm.nroFactura} onChange={e => setEntradaForm({...entradaForm, nroFactura: e.target.value})} className="win-input h-10 font-bold" />
+                </div>
+                <div className="form-group">
+                  <label className="text-xs font-bold">Tasa BCV:</label>
+                  <input type="number" step="0.01" value={entradaForm.tasa} onChange={e => setEntradaForm({...entradaForm, tasa: parseFloat(e.target.value) || 0})} className="win-input h-10" />
+                </div>
+              </div>
+              <div className="grid grid-cols-4 gap-6 mt-4">
+                <div className="form-group">
+                  <label className="text-xs font-bold">Tipo Compra:</label>
+                  <select value={entradaForm.tipoCompra} onChange={e => setEntradaForm({...entradaForm, tipoCompra: e.target.value})} className="win-input h-10">
+                    <option value="Contado">Contado</option>
+                    <option value="Credito">Crédito</option>
+                    <option value="Mixto">Mixto</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="text-xs font-bold">Días Crédito:</label>
+                  <input type="number" value={entradaForm.diasCredito} onChange={e => setEntradaForm({...entradaForm, diasCredito: parseInt(e.target.value) || 0})} className="win-input h-10" />
+                </div>
+                <div className="form-group">
+                  <label className="text-xs font-bold">Pago Contado (USD):</label>
+                  <input type="number" value={entradaForm.pagoContadoUsd || ''} onChange={e => setEntradaForm({...entradaForm, pagoContadoUsd: parseFloat(e.target.value) || 0})} className="win-input h-10" />
+                </div>
+                <div className="form-group">
+                  <label className="text-xs font-bold">Pago Contado (Bs.):</label>
+                  <input type="number" value={entradaForm.pagoContadoBs || ''} onChange={e => setEntradaForm({...entradaForm, pagoContadoBs: parseFloat(e.target.value) || 0})} className="win-input h-10" />
+                </div>
+              </div>
             </div>
-            <div className="table-responsive h-64">
+
+            <div className="flex gap-2 items-center bg-gray-200 p-2 border-y-2 border-gray-400 relative">
+              <button className="btn whitespace-nowrap" onClick={() => onOpenModal('modalProducto')}>➕ NUEVA FICHA</button>
+              <div className="flex-1 relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2"><Search size={14} className="text-gray-400" /></div>
+                <input 
+                  type="text" 
+                  value={entradaSearch} 
+                  onChange={e => handleEntradaSearch(e.target.value)} 
+                  className="win-input w-full pl-10 h-10" 
+                  placeholder="Buscar producto por código o nombre..." 
+                />
+                {entradaDropdown.length > 0 && (
+                  <div className="search-dropdown active w-full" style={{ top: '100%', left: 0 }}>
+                    {entradaDropdown.map(p => (
+                      <div key={p.codigo} className="search-dropdown-item" onClick={() => addToEntrada(p)}>
+                        <strong>{p.codigo}</strong> - {p.nombre} (Costo: ${p.costoActual})
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button className="btn whitespace-nowrap">➕ AÑADIR ITEM</button>
+            </div>
+
+            <div className="table-responsive h-48 mt-2">
               <table className="data-table">
-                <thead><tr><th>Producto</th><th>Cantidad</th><th>Costo USD</th><th>Subtotal</th><th>Acciones</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th>Código</th>
+                    <th>Descripción</th>
+                    <th className="text-center">Cant</th>
+                    <th className="text-right">Costo USD</th>
+                    <th className="text-right">Subtotal</th>
+                    <th className="text-center">Acción</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {entradaForm.items.map((item, i) => (
                     <tr key={i}>
+                      <td className="font-bold">{item.codigo}</td>
                       <td>{item.nombre}</td>
-                      <td><input type="number" value={item.cantidad} onChange={e => {
+                      <td className="text-center"><input type="number" value={item.cantidad} onChange={e => {
                         const its = [...entradaForm.items]; its[i].cantidad = parseInt(e.target.value) || 0; its[i].subtotal = its[i].cantidad * its[i].costo;
                         setEntradaForm({...entradaForm, items: its});
-                      }} className="win-input w-20" /></td>
-                      <td><input type="number" step="0.01" value={item.costo} onChange={e => {
+                      }} className="win-input w-16 text-center" /></td>
+                      <td className="text-right"><input type="number" step="0.01" value={item.costo} onChange={e => {
                         const its = [...entradaForm.items]; its[i].costo = parseFloat(e.target.value) || 0; its[i].subtotal = its[i].cantidad * its[i].costo;
                         setEntradaForm({...entradaForm, items: its});
-                      }} className="win-input w-24" /></td>
-                      <td style={{ textAlign: 'right' }}>${item.subtotal.toFixed(2)}</td>
-                      <td><button className="btn text-red-600" onClick={() => setEntradaForm({...entradaForm, items: entradaForm.items.filter((_, idx) => idx !== i)})}>🗑️</button></td>
+                      }} className="win-input w-24 text-right" /></td>
+                      <td className="text-right font-bold">${item.subtotal.toFixed(2)}</td>
+                      <td className="text-center">
+                        <button className="btn text-red-600 p-1" onClick={() => setEntradaForm({...entradaForm, items: entradaForm.items.filter((_, idx) => idx !== i)})}>
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
                     </tr>
                   ))}
+                  {entradaForm.items.length === 0 && (
+                    <tr><td colSpan={6} className="text-center py-10 italic text-gray-400">No hay items cargados en esta compra</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>
-            <div className="flex justify-between items-center bg-gray-300 p-2">
-               <label className="checkbox-label"><input type="checkbox" checked={entradaForm.credito} onChange={e => setEntradaForm({...entradaForm, credito: e.target.checked})} /> ¿Compra a Crédito?</label>
-               <div className="text-xl font-bold">Total Compra: ${entradaForm.items.reduce((s, i) => s + i.subtotal, 0).toFixed(2)}</div>
+
+            <div className="mt-4 grid grid-cols-4 gap-4">
+              <div className="dash-card bg-gray-300">
+                <div className="dash-label text-[10px]">TOTAL FACTURA (USD)</div>
+                <div className="dash-value text-xl">${totalEntradaUsd.toFixed(2)}</div>
+              </div>
+              <div className="dash-card bg-gray-300">
+                <div className="dash-label text-[10px]">EQUIVALENTE (BS.)</div>
+                <div className="dash-value text-xl">Bs. {(totalEntradaUsd * entradaForm.tasa).toFixed(2)}</div>
+              </div>
+              <div className="dash-card bg-emerald-100">
+                <div className="dash-label text-[10px]">PAGADO (USD)</div>
+                <div className="dash-value text-xl text-emerald-700">${pagoRealizadoUsd.toFixed(2)}</div>
+              </div>
+              <div className="dash-card bg-red-100">
+                <div className="dash-label text-[10px]">PENDIENTE CRÉDITO (USD)</div>
+                <div className="dash-value text-xl text-red-700">${pendienteUsd.toFixed(2)}</div>
+              </div>
             </div>
           </div>
-          <div className="modal-footer">
-            <button className="btn" onClick={onClose}>Cancelar</button>
-            <button className="btn btn-success" onClick={processEntrada}>💾 PROCESAR ENTRADA</button>
+          <div className="modal-footer flex justify-between bg-gray-200">
+            <button className="btn px-8" onClick={onClose}>Cancelar</button>
+            <button className="btn btn-primary px-8 flex gap-2 items-center" onClick={processEntrada}>
+              <Save size={14} /> PROCESAR ENTRADA
+            </button>
           </div>
         </div>
       )}
