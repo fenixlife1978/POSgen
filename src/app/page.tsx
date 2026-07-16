@@ -61,7 +61,6 @@ export default function POSPage() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
-          // Intentar obtener el perfil del usuario desde Firestore
           const userDoc = await getDoc(doc(db, 'users', user.uid));
           if (userDoc.exists()) {
             const userData = userDoc.data();
@@ -69,13 +68,13 @@ export default function POSPage() {
             setConfig(prev => ({ ...prev, vendedor: userData.name || user.email }));
             setIsLoggedIn(true);
           } else {
-            // Si el perfil no existe, pero hay sesión de Auth (bootstrap case)
+            // Caso bootstrap: Admin inicial
             setCurrentUser({ email: user.email, role: 'Administrador', name: 'Administrador' });
             setIsLoggedIn(true);
           }
         } catch (error) {
-          console.error("Error al cargar perfil de usuario:", error);
-          setIsLoggedIn(true); // Permitir acceso básico si hay sesión
+          console.error("Error al cargar perfil:", error);
+          setIsLoggedIn(true);
         }
       } else {
         setIsLoggedIn(false);
@@ -131,11 +130,9 @@ export default function POSPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // 1. Autenticar en Firebase Auth
       const userCredential = await signInWithEmailAndPassword(auth, loginData.email, loginData.password);
       const user = userCredential.user;
 
-      // 2. Verificar el Rol en Firestore
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       if (userDoc.exists()) {
         const userData = userDoc.data();
@@ -144,15 +141,7 @@ export default function POSPage() {
           notify(`Acceso denegado: El usuario no tiene el rol de ${loginData.role}`, 'error');
           return;
         }
-      } else {
-        // Permitir primer acceso de admin si no existe perfil en Firestore
-        if (loginData.email === 'admin@sistema.com' && loginData.role !== 'Administrador') {
-          await signOut(auth);
-          notify('El administrador principal debe seleccionar el rol de Administrador', 'error');
-          return;
-        }
       }
-
       notify('Acceso concedido. Cargando sistema...');
     } catch (error: any) {
       console.error(error);
@@ -197,6 +186,7 @@ export default function POSPage() {
                 value={loginData.email} 
                 onChange={e => setLoginData({...loginData, email: e.target.value})} 
                 placeholder="ejemplo@sistema.com"
+                className="win-input"
                 autoFocus 
               />
             </div>
@@ -205,7 +195,7 @@ export default function POSPage() {
               <select 
                 value={loginData.role} 
                 onChange={e => setLoginData({...loginData, role: e.target.value})}
-                className="win-input"
+                className="win-input font-bold"
               >
                 <option value="Administrador">Administrador</option>
                 <option value="Supervisor">Supervisor</option>
@@ -220,6 +210,7 @@ export default function POSPage() {
                 value={loginData.password} 
                 onChange={e => setLoginData({...loginData, password: e.target.value})} 
                 placeholder="••••••••"
+                className="win-input"
               />
             </div>
             <div style={{ marginTop: '20px', textAlign: 'right' }}>
@@ -253,7 +244,6 @@ export default function POSPage() {
           { id: 'usuarios', label: 'Usuarios' },
           { id: 'config', label: 'Configuración' }
         ].map(m => {
-          // Restricción básica de permisos en pestañas
           if (m.id === 'usuarios' && currentUser?.role !== 'Administrador') return null;
           if (m.id === 'config' && currentUser?.role !== 'Administrador') return null;
           
