@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -327,6 +326,18 @@ export function Modals({
                       onChange={e => handleProductPriceCalc('utilidadPorcentaje', parseFloat(e.target.value) || 0)} 
                       className="win-input font-bold text-blue-600"
                     />
+                  </div>
+                  <div className="form-group">
+                    <label>IVA / Impuestos:</label>
+                    <select 
+                      value={productForm.iva} 
+                      onChange={e => setProductForm({...productForm, iva: parseFloat(e.target.value) || 0, ivaAlicuota: parseFloat(e.target.value) || 0})} 
+                      className="win-input font-bold"
+                    >
+                      <option value="16">General (16%)</option>
+                      <option value="8">Reducida (8%)</option>
+                      <option value="0">Exento (0%)</option>
+                    </select>
                   </div>
                   <div className="form-group">
                     <label>Precio Detal (USD):</label>
@@ -704,7 +715,7 @@ export function Modals({
 
               <div className="mt-4 space-y-1 text-xs font-bold">
                 <div className="flex justify-between"><span>SUBTOTAL:</span> <span>${lastSale.subtotal.toFixed(2)}</span></div>
-                <div className="flex justify-between"><span>IVA (16%):</span> <span>${lastSale.iva.toFixed(2)}</span></div>
+                <div className="flex justify-between"><span>IVA:</span> <span>${lastSale.iva.toFixed(2)}</span></div>
                 <div className="flex justify-between border-t pt-1 font-black text-sm"><span>TOTAL USD:</span> <span>${lastSale.totalUsd.toFixed(2)}</span></div>
                 <div className="flex justify-between text-[10px]"><span>TOTAL Bs:</span> <span>Bs {lastSale.totalBs.toFixed(2)}</span></div>
               </div>
