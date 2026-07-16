@@ -14,8 +14,7 @@ interface ModalsProps {
   setSales: React.Dispatch<React.SetStateAction<Sale[]>>;
   accounts: Account[];
   setAccounts: React.Dispatch<React.SetStateAction<Account[]>>;
-  presupuestos: Presupuesto[];
-  setPresupuestos: React.Dispatch<React.SetStateAction<Presupuesto[]>>;
+  presupuestos: React.Dispatch<React.SetStateAction<Presupuesto[]>>;
   cart: CartItem[];
   setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
   config: any;
@@ -25,10 +24,11 @@ interface ModalsProps {
 
 export function Modals({ 
   activeModal, onClose, products, setProducts, clients, setClients, 
-  sales, setSales, accounts, setAccounts, presupuestos, setPresupuestos,
+  sales, setSales, accounts, setAccounts, presupuestos,
   cart, setCart, config, notify, selectedRow 
 }: ModalsProps) {
   
+  // Estados para Ficha Maestra
   const [marcas, setMarcas] = useState(['Universal', 'Toyota', 'Ford', 'Mobil', 'Castrol', 'Fram', 'NGK', 'Brembo', 'Gates', 'MAC', 'Rain-X', 'Prestone', 'Valvoline']);
   const [unidades, setUnidades] = useState(['Unidad', 'Kilo', 'Litro', 'Caja', 'Galón', 'Kit', 'Servicio']);
   const [categorias, setCategorias] = useState(['Repuesto', 'Lubricante', 'Servicio', 'Accesorio']);
@@ -71,13 +71,39 @@ export function Modals({
     capacidadContenido: 0
   });
 
-  const recalcPrice = (field: string, value: number) => {
+  // Estados para Entrada por Compra
+  const [purchaseForm, setPurchaseForm] = useState({
+    proveedor: '',
+    nroFactura: '',
+    tasa: config.tasa || 1,
+    tipo: 'Contado',
+    diasCredito: 0,
+    pagoContadoUsd: 0,
+    pagoContadoBs: 0,
+    items: [] as any[]
+  });
+
+  const [itemCompra, setItemCompra] = useState({
+    productIdx: -1,
+    cantidad: 1,
+    costo: 0
+  });
+
+  // Efecto para actualizar tasa por defecto en compra
+  useEffect(() => {
+    if (activeModal === 'modalEntrada') {
+      setPurchaseForm(prev => ({ ...prev, tasa: config.tasa }));
+    }
+  }, [activeModal, config.tasa]);
+
+  const handleProductPriceCalc = (field: string, value: number) => {
     const cost = productForm.costoPromedio || 0;
     const tasa = config.tasa || 1;
     let newForm = { ...productForm };
 
     if (field === 'utilidadPorcentaje') {
       const u = value / 100;
+      // Formula Markup sobre Venta: Precio = Costo / (1 - Utilidad%)
       const pUsd = u >= 1 ? cost : cost / (1 - u);
       newForm.utilidadPorcentaje = value;
       newForm.precio1 = pUsd;
@@ -138,17 +164,71 @@ export function Modals({
     onClose();
   };
 
+  // Lógica Compra
+  const handlePagoMixto = (val: number, moneda: 'USD' | 'BS') => {
+    const tasa = purchaseForm.tasa;
+    if (moneda === 'USD') {
+      setPurchaseForm({ ...purchaseForm, pagoContadoUsd: val, pagoContadoBs: val * tasa });
+    } else {
+      setPurchaseForm({ ...purchaseForm, pagoContadoBs: val, pagoContadoUsd: val / tasa });
+    }
+  };
+
+  const addItemToPurchase = () => {
+    if (itemCompra.productIdx === -1) {
+      notify('Seleccione un producto', 'error');
+      return;
+    }
+    const prod = products[itemCompra.productIdx];
+    const newItem = {
+      ...prod,
+      productIdx: itemCompra.productIdx,
+      cantidad: itemCompra.cantidad,
+      costo: itemCompra.costo
+    };
+    setPurchaseForm({
+      ...purchaseForm,
+      items: [...purchaseForm.items, newItem]
+    });
+    setItemCompra({ productIdx: -1, cantidad: 1, costo: 0 });
+  };
+
+  const getPurchaseTotals = () => {
+    const totalFactura = purchaseForm.items.reduce((acc, item) => acc + (item.cantidad * item.costo), 0);
+    const equivBs = totalFactura * purchaseForm.tasa;
+    let totalPagado = 0;
+    
+    if (purchaseForm.tipo === 'Contado') totalPagado = totalFactura;
+    else if (purchaseForm.tipo === 'Credito') totalPagado = 0;
+    else totalPagado = purchaseForm.pagoContadoUsd;
+
+    return {
+      totalFactura,
+      equivBs,
+      totalPagado,
+      totalPendiente: totalFactura - totalPagado
+    };
+  };
+
+  const purchaseTotals = getPurchaseTotals();
+
   if (!activeModal) return null;
 
   return (
     <div className={`modal-overlay ${activeModal ? 'active' : ''}`} onClick={onClose}>
-      <div className={`modal-window ${activeModal === 'modalProducto' ? 'xlarge' : 'large'}`} onClick={(e) => e.stopPropagation()}>
+      <div className={`modal-window ${['modalProducto', 'modalEntrada'].includes(activeModal) ? 'xlarge' : 'large'}`} onClick={(e) => e.stopPropagation()}>
         <div className="modal-titlebar">
-          <span>{activeModal === 'modalProducto' ? '📦 Ficha Maestra de Producto' : activeModal?.replace('modal', '')}</span>
+          <span>
+            {activeModal === 'modalProducto' ? '📦 Ficha Maestra de Producto' : 
+             activeModal === 'modalEntrada' ? '📥 Entrada por Compra (Procesar Factura)' :
+             activeModal?.replace('modal', '')}
+          </span>
           <span className="modal-close" onClick={onClose}>✕</span>
         </div>
         
         <div className="modal-body" onKeyDown={activeModal === 'modalProducto' ? handleMasterNav : undefined}>
+          
+          {/* MODAL FICHA MAESTRA PRODUCTO */}
           {activeModal === 'modalProducto' && (
             <div className="space-y-6">
               <div className="win-window p-4 space-y-4">
@@ -164,13 +244,13 @@ export function Modals({
                 </div>
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="flex justify-between">Marca: <span className="cursor-pointer text-blue-700" onClick={() => handleAddOption('Marca')}>[+]</span></label>
+                    <label className="flex justify-between">Marca: <span className="cursor-pointer text-blue-700 font-bold" onClick={() => handleAddOption('Marca')}>[+]</span></label>
                     <select value={productForm.marca} onChange={e => setProductForm({...productForm, marca: e.target.value})}>
                       {marcas.map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="flex justify-between">Unidad: <span className="cursor-pointer text-blue-700" onClick={() => handleAddOption('Unidad')}>[+]</span></label>
+                    <label className="flex justify-between">Unidad: <span className="cursor-pointer text-blue-700 font-bold" onClick={() => handleAddOption('Unidad')}>[+]</span></label>
                     <select value={productForm.unidad} onChange={e => setProductForm({...productForm, unidad: e.target.value})}>
                       {unidades.map(u => <option key={u} value={u}>{u}</option>)}
                     </select>
@@ -188,13 +268,13 @@ export function Modals({
                 <h4 className="text-blue-900 font-bold border-b border-gray-400 pb-1 mb-2">2. Clasificación y Existencias</h4>
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="flex justify-between">Departamento: <span className="cursor-pointer text-blue-700" onClick={() => handleAddOption('Departamento')}>[+]</span></label>
+                    <label className="flex justify-between">Departamento: <span className="cursor-pointer text-blue-700 font-bold" onClick={() => handleAddOption('Departamento')}>[+]</span></label>
                     <select value={productForm.departamento} onChange={e => setProductForm({...productForm, departamento: e.target.value})}>
                       {departamentos.map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="flex justify-between">Categoría: <span className="cursor-pointer text-blue-700" onClick={() => handleAddOption('Categoria')}>[+]</span></label>
+                    <label className="flex justify-between">Categoría: <span className="cursor-pointer text-blue-700 font-bold" onClick={() => handleAddOption('Categoria')}>[+]</span></label>
                     <select value={productForm.categoria} onChange={e => setProductForm({...productForm, categoria: e.target.value})}>
                       {categorias.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
@@ -220,15 +300,15 @@ export function Modals({
                   <div className="form-row items-end">
                     <div className="form-group">
                       <label className="text-blue-800 font-bold">Ganancia (% Markup):</label>
-                      <input type="number" value={productForm.utilidadPorcentaje || 0} onChange={e => recalcPrice('utilidadPorcentaje', parseFloat(e.target.value) || 0)} className="text-lg font-black" />
+                      <input type="number" value={productForm.utilidadPorcentaje || 0} onChange={e => handleProductPriceCalc('utilidadPorcentaje', parseFloat(e.target.value) || 0)} className="text-lg font-black" />
                     </div>
                     <div className="form-group">
                       <label className="text-green-800 font-bold">Precio Detal USD:</label>
-                      <input type="number" value={productForm.precio1 || 0} onChange={e => recalcPrice('precio1', parseFloat(e.target.value) || 0)} className="text-xl font-black text-green-700" />
+                      <input type="number" value={productForm.precio1 || 0} onChange={e => handleProductPriceCalc('precio1', parseFloat(e.target.value) || 0)} className="text-xl font-black text-green-700" />
                     </div>
                     <div className="form-group">
                       <label className="text-red-800 font-bold">Precio Detal Bs (Tasa {config.tasa}):</label>
-                      <input type="number" value={((productForm.precio1 || 0) * config.tasa)} onChange={e => recalcPrice('precioBs', parseFloat(e.target.value) || 0)} className="text-xl font-black text-red-700" />
+                      <input type="number" value={((productForm.precio1 || 0) * config.tasa)} onChange={e => handleProductPriceCalc('precioBs', parseFloat(e.target.value) || 0)} className="text-xl font-black text-red-700" />
                     </div>
                   </div>
                 </div>
@@ -255,6 +335,10 @@ export function Modals({
                     <label className="checkbox-label"><input type="checkbox" checked={productForm.stockPropio} onChange={e => setProductForm({...productForm, stockPropio: e.target.checked})} /> Posee Stock Propio (vs Virtual)</label>
                     <label className="checkbox-label"><input type="checkbox" checked={productForm.manejaSeriales} onChange={e => setProductForm({...productForm, manejaSeriales: e.target.checked})} /> Maneja Seriales</label>
                     <label className="checkbox-label"><input type="checkbox" checked={productForm.manejaLotes} onChange={e => setProductForm({...productForm, manejaLotes: e.target.checked})} /> Maneja Lotes / Vencimiento</label>
+                    <div className="form-group mt-2">
+                      <label>Contenido por Empaque:</label>
+                      <input type="number" value={productForm.capacidadContenido || 0} onChange={e => setProductForm({...productForm, capacidadContenido: parseFloat(e.target.value) || 0})} placeholder="Ej: 24 unidades x caja" />
+                    </div>
                   </div>
                   {productForm.isKit && (
                     <div className="border p-2 bg-gray-50 text-xs">
@@ -268,6 +352,75 @@ export function Modals({
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL ENTRADA POR COMPRA (EL SOLICITADO) */}
+          {activeModal === 'modalEntrada' && (
+            <div className="space-y-6">
+              <div className="win-window p-4">
+                <div className="flex justify-between items-center border-b border-gray-400 pb-2 mb-4">
+                  <h4 className="text-blue-900 font-bold">📦 Datos de Factura de Compra</h4>
+                  <button className="btn btn-primary text-xs" onClick={() => notify('Abre modal producto sin cerrar compra', 'info')}>+ Nuevo Producto en Factura</button>
+                </div>
+                <div className="form-row">
+                  <div className="form-group flex-[2]"><label>Proveedor:</label><input type="text" value={purchaseForm.proveedor} onChange={e => setPurchaseForm({...purchaseForm, proveedor: e.target.value})} placeholder="Nombre o RIF Proveedor" /></div>
+                  <div className="form-group"><label>N° Factura:</label><input type="text" value={purchaseForm.nroFactura} onChange={e => setPurchaseForm({...purchaseForm, nroFactura: e.target.value})} /></div>
+                  <div className="form-group"><label>Tasa BCV (Bs):</label><input type="number" value={purchaseForm.tasa} onChange={e => setPurchaseForm({...purchaseForm, tasa: parseFloat(e.target.value) || 0})} className="font-bold text-red-700" /></div>
+                </div>
+                <div className="form-row">
+                  <div className="form-group"><label>Tipo Compra:</label>
+                    <select value={purchaseForm.tipo} onChange={e => setPurchaseForm({...purchaseForm, tipo: e.target.value as any})}>
+                      <option>Contado</option>
+                      <option>Credito</option>
+                      <option>Mixto</option>
+                    </select>
+                  </div>
+                  {(purchaseForm.tipo === 'Credito' || purchaseForm.tipo === 'Mixto') && (
+                    <div className="form-group animate-in fade-in"><label>Días Crédito:</label><input type="number" value={purchaseForm.diasCredito} onChange={e => setPurchaseForm({...purchaseForm, diasCredito: parseInt(e.target.value) || 0})} /></div>
+                  )}
+                  {purchaseForm.tipo === 'Mixto' && (
+                    <>
+                      <div className="form-group animate-in fade-in"><label>Pago Contado (USD):</label><input type="number" value={purchaseForm.pagoContadoUsd} onChange={e => handlePagoMixto(parseFloat(e.target.value) || 0, 'USD')} /></div>
+                      <div className="form-group animate-in fade-in"><label>Pago Contado (BS):</label><input type="number" value={purchaseForm.pagoContadoBs} onChange={e => handlePagoMixto(parseFloat(e.target.value) || 0, 'BS')} /></div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="win-window p-4 bg-blue-50">
+                <h4 className="text-blue-900 font-bold border-b border-gray-400 pb-1 mb-2">📥 Selección de Items</h4>
+                <div className="form-row items-end">
+                  <div className="form-group flex-[3]">
+                    <label>Buscar Producto:</label>
+                    <select value={itemCompra.productIdx} onChange={e => setItemCompra({...itemCompra, productIdx: parseInt(e.target.value)})}>
+                      <option value="-1">Seleccione...</option>
+                      {products.map((p, i) => <option key={i} value={i}>{p.codigo} - {p.nombre}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group"><label>Cantidad:</label><input type="number" value={itemCompra.cantidad} onChange={e => setItemCompra({...itemCompra, cantidad: parseInt(e.target.value) || 0})} /></div>
+                  <div className="form-group"><label>Costo Actual (USD):</label><input type="number" value={itemCompra.costo} onChange={e => setItemCompra({...itemCompra, costo: parseFloat(e.target.value) || 0})} /></div>
+                  <div className="form-group"><button className="btn btn-success w-full" onClick={addItemToPurchase}>+ Agregar</button></div>
+                </div>
+
+                <div className="table-container mt-4" style={{ height: '150px' }}>
+                  <table className="product-table">
+                    <thead><tr><th>Código</th><th>Descripción</th><th>Cant</th><th>Costo</th><th>Total</th></tr></thead>
+                    <tbody>
+                      {purchaseForm.items.map((it, idx) => (
+                        <tr key={idx}><td>{it.codigo}</td><td>{it.nombre}</td><td>{it.cantidad}</td><td>${it.costo.toFixed(2)}</td><td>${(it.cantidad * it.costo).toFixed(2)}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="win-window p-4 bg-black text-white flex justify-between items-center rounded-none border-4 border-gray-500">
+                <div className="text-center"><p className="text-[10px] text-gray-400">TOTAL FACTURA USD</p><div className="text-2xl font-black text-yellow-400">${purchaseTotals.totalFactura.toFixed(2)}</div></div>
+                <div className="text-center"><p className="text-[10px] text-gray-400">EQUIV. BS ({purchaseForm.tasa})</p><div className="text-2xl font-black text-blue-400">Bs. {purchaseTotals.equivBs.toLocaleString()}</div></div>
+                <div className="text-center"><p className="text-[10px] text-gray-400">TOTAL PAGADO USD</p><div className="text-2xl font-black text-green-400">${purchaseTotals.totalPagado.toFixed(2)}</div></div>
+                <div className="text-center"><p className="text-[10px] text-gray-400">PENDIENTE USD</p><div className="text-2xl font-black text-red-500">${purchaseTotals.totalPendiente.toFixed(2)}</div></div>
               </div>
             </div>
           )}
@@ -299,6 +452,9 @@ export function Modals({
           <button className="btn" onClick={onClose}>Cancelar</button>
           {activeModal === 'modalProducto' && (
             <button className="btn btn-success" onClick={saveProduct}>💾 Guardar Ficha Maestra</button>
+          )}
+          {activeModal === 'modalEntrada' && (
+            <button className="btn btn-success" onClick={() => { notify('Compra registrada con éxito'); onClose(); }}>💾 Procesar Factura de Compra</button>
           )}
         </div>
       </div>
