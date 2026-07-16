@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -29,6 +30,8 @@ export default function POSPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [posCart, setPosCart] = useState<CartItem[]>([]);
   const [selectedRow, setSelectedRow] = useState(-1);
+  const [editingId, setEditingId] = useState<string | number | null>(null);
+
   const [config, setConfig] = useState({
     tasa: 724.00,
     igtf: 3,
@@ -37,14 +40,14 @@ export default function POSPage() {
     nombreEmpresa: 'AutoParts C.A.',
     direccion: 'Av. Principal, Local 5',
     telefono: '0212-5551234',
-    vendedor: 'MARIA VERASTEGUI',
-    vVendedores: ['MARIA VERASTEGUI', 'JUAN PEREZ', 'CARLOS LOPEZ'],
+    vendedor: 'ADMIN',
+    vVendedores: ['ADMIN'],
     nextInvoice: 1,
   });
 
   // Initialization
   useEffect(() => {
-    const saved = localStorage.getItem('autoparts_pos_db_v4');
+    const saved = localStorage.getItem('autoparts_pos_db_final');
     if (saved) {
       const data = JSON.parse(saved);
       if (data.products) setProducts(data.products);
@@ -55,12 +58,8 @@ export default function POSPage() {
       if (data.users) setUsers(data.users);
       if (data.config) setConfig(data.config);
     } else {
-      // Default Data
       setUsers([
-        { id: '1', username: 'Admin', password: '123', name: 'Administrador Principal', role: 'Administrador', active: true }
-      ]);
-      setProducts([
-        { codigo: 'ACE-5W30', descripcion: 'ACEITE MOTOR 5W-30 SYNTHETIC 1GL', nombre: 'Aceite Mobil 5W30', categoria: 'Lubricante', marca: 'Mobil', unidad: 'Galón', moneda: 'base', departamento: 'Lubricantes', precio1: 28.50, precioUsd: 28.50, iva: 16, stock: 35, stockMin: 10, ubicacion: 'C-1', isKit: false, stockPropio: true, activo: true, costoPromedio: 18.00, costoAnterior: 18.00, costoActual: 18.00, utilidadPorcentaje: 36.84, precio2: 25, precio3: 22, precio4: 20, ivaAlicuota: 16, permiteDescuento: true, manejaSeriales: false, manejaLotes: false, manejaTallasColores: false, manejaPeso: false, kitComponents: [] }
+        { id: '1', username: 'Admin', password: '123', name: 'Administrador', role: 'Administrador', active: true }
       ]);
       setClients([
         { tipoRif: 'V', rifNum: '00000000-0', nombre: 'Consumidor Final', telefono: '', email: '', direccion: '', tipo: 'Regular', credito: 0, saldo: 0 }
@@ -70,7 +69,7 @@ export default function POSPage() {
 
   useEffect(() => {
     const data = { products, clients, sales, accounts, presupuestos, users, config };
-    localStorage.setItem('autoparts_pos_db_v4', JSON.stringify(data));
+    localStorage.setItem('autoparts_pos_db_final', JSON.stringify(data));
   }, [products, clients, sales, accounts, presupuestos, users, config]);
 
   const handleLogin = (e: React.FormEvent) => {
@@ -93,8 +92,14 @@ export default function POSPage() {
     }
   };
 
-  const openModal = (id: string) => setActiveModal(id);
-  const closeModal = () => setActiveModal(null);
+  const openModal = (id: string, dataId?: string | number) => {
+    setEditingId(dataId || null);
+    setActiveModal(id);
+  };
+  const closeModal = () => {
+    setActiveModal(null);
+    setEditingId(null);
+  };
 
   if (!isLoggedIn) {
     return (
@@ -104,25 +109,14 @@ export default function POSPage() {
           <form onSubmit={handleLogin}>
             <div className="form-group">
               <label>Usuario:</label>
-              <input 
-                type="text" 
-                required 
-                value={loginData.username} 
-                onChange={e => setLoginData({...loginData, username: e.target.value})} 
-                autoFocus 
-              />
+              <input type="text" required value={loginData.username} onChange={e => setLoginData({...loginData, username: e.target.value})} autoFocus />
             </div>
             <div className="form-group">
               <label>Contraseña:</label>
-              <input 
-                type="password" 
-                required 
-                value={loginData.password} 
-                onChange={e => setLoginData({...loginData, password: e.target.value})} 
-              />
+              <input type="password" required value={loginData.password} onChange={e => setLoginData({...loginData, password: e.target.value})} />
             </div>
             <div style={{ marginTop: '20px', textAlign: 'right' }}>
-              <button type="submit" className="btn btn-primary" style={{ padding: '8px 25px' }}>Entrar</button>
+              <button type="submit" className="btn btn-primary">Entrar</button>
             </div>
           </form>
           <div id="notification" className="notification"></div>
@@ -134,97 +128,52 @@ export default function POSPage() {
   return (
     <div id="mainApp">
       <div id="notification" className="notification"></div>
-
       <div className="dollar-bar">
-        <span style={{ fontSize: '18px' }}>💲</span>
-        <span>DOLAR: <strong id="dolarRate">{config.tasa.toFixed(2)}</strong></span>
-        <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#555' }}>
-          AutoParts POS v2.0 | Repuestos, Lubricantes y Servicios Automotrices
-        </span>
+        <span>💲 DOLAR: <strong>{config.tasa.toFixed(2)}</strong></span>
+        <span style={{ marginLeft: 'auto', fontSize: '11px' }}>{config.nombreEmpresa} | Sistema de Punto de Venta e Inventario</span>
       </div>
-
       <div className="nav-tabs">
         {[
-          { id: 'pos', label: '️ POS Venta' },
-          { id: 'dashboard', label: ' Dashboard' },
-          { id: 'productos', label: '📦 Productos' },
-          { id: 'clientes', label: '👥 Clientes' },
-          { id: 'ventas', label: '🧾 Ventas' },
-          { id: 'inventario', label: '📋 Inventario' },
-          { id: 'reportes', label: '📈 Reportes' },
-          { id: 'cuentas', label: '💰 Cuentas' },
-          { id: 'usuarios', label: '👤 Usuarios' },
-          { id: 'config', label: '⚙️ Configuración' }
+          { id: 'pos', label: 'POS Venta' },
+          { id: 'dashboard', label: 'Dashboard' },
+          { id: 'productos', label: 'Productos' },
+          { id: 'clientes', label: 'Clientes' },
+          { id: 'ventas', label: 'Ventas' },
+          { id: 'inventario', label: 'Inventario' },
+          { id: 'reportes', label: 'Reportes' },
+          { id: 'cuentas', label: 'Cuentas' },
+          { id: 'usuarios', label: 'Usuarios' },
+          { id: 'config', label: 'Configuración' }
         ].map(m => (
           <div key={m.id} className={`nav-tab ${activeModule === m.id ? 'active' : ''}`} onClick={() => setActiveModule(m.id)}>
             {m.label}
           </div>
         ))}
       </div>
-
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
-        <PosModule 
-          active={activeModule === 'pos'} 
-          onOpenModal={openModal} 
-          products={products}
-          clients={clients}
-          cart={posCart}
-          setCart={setPosCart}
-          config={config}
-          notify={notify}
-          selectedRow={selectedRow}
-          setSelectedRow={setSelectedRow}
-        />
-        
+        <PosModule active={activeModule === 'pos'} onOpenModal={openModal} products={products} clients={clients} cart={posCart} setCart={setPosCart} config={config} notify={notify} selectedRow={selectedRow} setSelectedRow={setSelectedRow} />
         <DashboardModule active={activeModule === 'dashboard'} sales={sales} products={products} config={config} />
-        
-        <ProductsModule 
-          active={activeModule === 'productos'} 
-          onOpenModal={openModal} 
-          products={products}
-          tasa={config.tasa}
-        />
-        
-        <ClientsModule active={activeModule === 'clientes'} onOpenModal={openModal} clients={clients} />
-        
-        <SalesModule active={activeModule === 'ventas'} sales={sales} notify={notify} />
-        
+        <ProductsModule active={activeModule === 'productos'} onOpenModal={openModal} products={products} setProducts={setProducts} tasa={config.tasa} notify={notify} />
+        <ClientsModule active={activeModule === 'clientes'} onOpenModal={openModal} clients={clients} setClients={setClients} notify={notify} />
+        <SalesModule active={activeModule === 'ventas'} sales={sales} setSales={setSales} products={products} setProducts={setProducts} notify={notify} />
         <InventoryModule active={activeModule === 'inventario'} onOpenModal={openModal} products={products} />
-        
         <ReportsModule active={activeModule === 'reportes'} sales={sales} products={products} clients={clients} config={config} />
-        
         <AccountsModule active={activeModule === 'cuentas'} accounts={accounts} />
-        
-        <UsersModule active={activeModule === 'usuarios'} users={users} onOpenModal={openModal} />
-        
+        <UsersModule active={activeModule === 'usuarios'} users={users} setUsers={setUsers} onOpenModal={openModal} notify={notify} />
         <ConfigModule active={activeModule === 'config'} onOpenModal={openModal} config={config} setConfig={setConfig} notify={notify} />
       </div>
-
       <div className="status-bar">
-        <span className="status-section"> Usuario: {loginData.username}</span>
-        <span className="status-section"> Conectado (Tasa: {config.tasa})</span>
-        <span className="status-section"> DB: LocalStorage / MarketerPro</span>
-        <span className="status-section">Última Venta: {sales.length > 0 ? sales[sales.length-1].numero : '--'}</span>
+        <span> Usuario: {loginData.username}</span>
+        <span> Tasa: {config.tasa}</span>
+        <span> Ventas: {sales.filter(s => s.estado === 'Completada').length}</span>
+        <span> Último Doc: {sales.length > 0 ? sales[sales.length-1].numero : '--'}</span>
       </div>
-
       <Modals 
-        activeModal={activeModal} 
-        onClose={closeModal} 
-        products={products}
-        setProducts={setProducts}
-        clients={clients}
-        setClients={setClients}
-        sales={sales}
-        setSales={setSales}
-        accounts={accounts}
-        setAccounts={setAccounts}
-        presupuestos={presupuestos}
-        setPresupuestos={setPresupuestos}
-        cart={posCart}
-        setCart={setPosCart}
-        config={config}
-        notify={notify}
-        selectedRow={selectedRow}
+        activeModal={activeModal} onClose={closeModal} products={products} setProducts={setProducts} 
+        clients={clients} setClients={setClients} sales={sales} setSales={setSales} 
+        accounts={accounts} setAccounts={setAccounts} presupuestos={setPresupuestos} 
+        cart={posCart} setCart={setPosCart} config={config} setConfig={setConfig} notify={notify} 
+        selectedRow={selectedRow} editingId={editingId} users={users} setUsers={setUsers}
       />
     </div>
   );
