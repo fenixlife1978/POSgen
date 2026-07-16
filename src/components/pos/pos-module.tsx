@@ -1,8 +1,8 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import { Product, Client, CartItem } from '@/types/pos';
+import { Wallet } from 'lucide-react';
 
 interface PosModuleProps {
   active: boolean;
@@ -72,12 +72,12 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
     let subtotal = 0;
     let totalIva = 0;
     cart.forEach(item => {
-      const s = item.precioUsd * item.cantidad;
+      const s = Math.round(item.precioUsd * item.cantidad * 100) / 100;
       subtotal += s;
-      totalIva += s * (item.iva / 100);
+      totalIva += Math.round(s * (item.iva / 100) * 100) / 100;
     });
-    const totalUsd = subtotal + totalIva;
-    return { subtotal, totalIva, totalUsd, totalBs: totalUsd * config.tasa };
+    const totalUsd = Math.round((subtotal + totalIva) * 100) / 100;
+    return { subtotal, totalIva, totalUsd, totalBs: Math.round(totalUsd * config.tasa * 100) / 100 };
   };
 
   const totals = getTotals();
@@ -164,9 +164,8 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
         </div>
 
         <div className="right-sidebar">
-          <button className="sidebar-btn" onClick={() => onOpenModal('modalProcesar')}>Procesar F12</button>
-          <button className="sidebar-btn" onClick={() => setCart(cart.filter((_, idx) => idx !== selectedRow))}>Eliminar Item</button>
           <button className="sidebar-btn" onClick={() => onOpenModal('modalConsultar')}>Consultar F2</button>
+          <button className="sidebar-btn" onClick={() => setCart(cart.filter((_, idx) => idx !== selectedRow))}>Eliminar Item</button>
           <button className="sidebar-btn" onClick={() => onOpenModal('modalCliente')}>Nuevo Cliente</button>
           <button className="sidebar-btn" onClick={() => onOpenModal('modalProducto')}>Nuevo Item</button>
           <button className="sidebar-btn" style={{ marginTop: 'auto', background: '#f0a0a0' }}>SALIR</button>
@@ -179,17 +178,42 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
           <div className="total-value">${totals.subtotal.toFixed(2)}</div>
         </div>
         <div className="total-box iva">
-          <span className="total-label">IVA (16%):</span>
+          <span className="total-label">IVA:</span>
           <div className="total-value">${totals.totalIva.toFixed(2)}</div>
         </div>
-        <div className="total-box total-bs">
+        <div className="total-box total-bs" style={{ background: '#ff6b6b' }}>
           <span className="total-label">Total Bs:</span>
           <div className="total-value">{totals.totalBs.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</div>
         </div>
-        <div className="total-box divisas">
+        <div className="total-box divisas" style={{ background: '#87ceeb' }}>
           <span className="total-label">TOTAL USD:</span>
           <div className="total-value">${totals.totalUsd.toFixed(2)}</div>
         </div>
+        
+        <button 
+          className="btn btn-success" 
+          style={{ 
+            height: '50px', 
+            padding: '0 20px', 
+            marginLeft: '10px', 
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            fontSize: '14px',
+            background: '#d0f0d0',
+            border: '2px solid #fff',
+            boxShadow: '2px 2px 0 #000'
+          }}
+          disabled={cart.length === 0}
+          onClick={() => onOpenModal('modalProcesar')}
+        >
+          <div style={{ background: '#fff', borderRadius: '50%', padding: '5px' }}>
+            <Wallet size={20} className="text-primary" />
+          </div>
+          ABONAR CUENTA
+        </button>
+
         <div style={{marginLeft:'auto', display:'flex', gap:'15px', paddingRight:'10px', fontSize:'12px', fontWeight:'bold'}}>
           <span>Items: <strong style={{color:'#000080'}}>{cart.length}</strong></span>
           <span>Unidades: <strong style={{color:'#000080'}}>{cart.reduce((s, i) => s + i.cantidad, 0)}</strong></span>
