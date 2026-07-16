@@ -54,7 +54,7 @@ export function InventoryModule({ active, onOpenModal, products, movements }: In
                   <td>{new Date(m.fecha).toLocaleString()}</td>
                   <td style={{ fontWeight: 'bold' }}>{m.tipo}</td>
                   <td>{m.referencia} - {m.comentario}</td>
-                  <td style={{ textAlign: 'center', color: 'green', fontWeight: 'bold' }}>{(m.tipo === 'ENTRADA' || (m.tipo === 'AJUSTE' && m.cantidad > 0)) ? Math.abs(m.cantidad) : '-'}</td>
+                  <td style={{ textAlign: 'center', color: 'green', fontWeight: 'bold' }}>{(m.tipo === 'ENTRADA' || (m.tipo === 'AJUSTE' && m.cantidad > 0) || m.tipo === 'ANULACION') ? Math.abs(m.cantidad) : '-'}</td>
                   <td style={{ textAlign: 'center', color: 'red', fontWeight: 'bold' }}>{(m.tipo === 'SALIDA' || m.tipo === 'VENTA' || (m.tipo === 'AJUSTE' && m.cantidad < 0)) ? Math.abs(m.cantidad) : '-'}</td>
                   <td style={{ textAlign: 'center' }}>{m.stockPrevio}</td>
                   <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{m.stockNuevo}</td>

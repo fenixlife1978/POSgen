@@ -77,6 +77,18 @@ export function Modals({
   const initialProvider: Provider = { id: '', rif: '', nombre: '', direccion: '', contacto: '', telefono: '' };
   const [providerForm, setProviderForm] = useState<Provider>(initialProvider);
 
+  // --- ENTRADA COMPRA FORM ---
+  const [entradaForm, setEntradaForm] = useState({
+    proveedor: '', rif: '', nroFactura: '', tasa: config.tasa, credito: false, items: [] as any[]
+  });
+  const [entradaSearch, setEntradaSearch] = useState('');
+  const [entradaDropdown, setEntradaDropdown] = useState<Product[]>([]);
+
+  // --- AJUSTE FORM ---
+  const [ajusteForm, setAjusteForm] = useState({
+    codigo: '', tipo: 'ENTRADA' as 'ENTRADA' | 'SALIDA', cantidad: 1, motivo: '', comentario: ''
+  });
+
   // --- PAYMENT CALCULATOR ---
   const [paymentState, setPaymentState] = useState({
     method: 'Efectivo USD',
@@ -86,6 +98,7 @@ export function Modals({
   });
 
   const [lastSale, setLastSale] = useState<Sale | null>(null);
+  const [viewSale, setViewSale] = useState<Sale | null>(null);
 
   useEffect(() => {
     if (activeModal === 'modalProducto' && editingId !== null) {
@@ -125,17 +138,28 @@ export function Modals({
       setPaymentState({ method: 'Efectivo USD', amount: 0, payments: [], totalPaidUsd: 0 });
       setTimeout(() => methodRef.current?.focus(), 100);
     }
-  }, [activeModal, editingId, products, clients, providers, config.tasa]);
+
+    if (activeModal === 'modalDetalleVenta' && editingId) {
+      const s = sales.find(s => s.numero === editingId);
+      if (s) setViewSale(s);
+    }
+
+    if (activeModal === 'modalEntrada') {
+      setEntradaForm({ proveedor: '', rif: '', nroFactura: '', tasa: config.tasa, credito: false, items: [] });
+    }
+
+    if (activeModal === 'modalAjuste') {
+      setAjusteForm({ codigo: '', tipo: 'ENTRADA', cantidad: 1, motivo: 'Diferencia de Inventario', comentario: '' });
+    }
+  }, [activeModal, editingId, products, clients, providers, config.tasa, sales]);
 
   const handleSaveProvider = () => {
     if (!providerForm.rif || !providerForm.nombre) {
       notify('❌ RIF y Nombre son obligatorios', 'error');
       return;
     }
-    
     let updatedProviders = [...providers];
     const isNew = editingId === null;
-    
     if (isNew) {
       if (providers.some(p => p.rif === providerForm.rif)) {
         notify('❌ Este RIF ya está registrado', 'error');
@@ -145,7 +169,6 @@ export function Modals({
     } else {
       updatedProviders = providers.map(p => p.id === editingId ? { ...providerForm } : p);
     }
-
     setProviders(updatedProviders);
     notify(`✅ Proveedor ${isNew ? 'registrado' : 'actualizado'} correctamente`);
     onClose();
@@ -177,7 +200,6 @@ export function Modals({
     const cost = newForm.costoPromedio;
     const tasa = config.tasa;
     const val = parseFloat(valStr) || 0;
-
     if (field === 'utilidadPorcentaje') {
       setMarkupText(valStr);
       const newPrice = val >= 100 ? cost : Math.round((cost / (1 - val/100)) * 100) / 100;
@@ -207,10 +229,8 @@ export function Modals({
       notify('❌ Código y Nombre son obligatorios', 'error');
       return;
     }
-    
     let updatedProducts = [...products];
     const isNew = editingId === null;
-    
     const finalForm = {
       ...productForm,
       stock: parseInt(stockInicial) || 0,
@@ -218,7 +238,6 @@ export function Modals({
       utilidadPorcentaje: parseFloat(markupText) || 0,
       precio1: parseFloat(precioUsdText) || 0
     };
-
     if (isNew) {
       updatedProducts.push(finalForm);
       if (parseInt(stockInicial) > 0) {
@@ -239,9 +258,114 @@ export function Modals({
     } else {
       updatedProducts[editingId] = finalForm;
     }
-
     setProducts(updatedProducts);
     notify(`✅ Producto ${isNew ? 'creado' : 'actualizado'} correctamente`);
+    onClose();
+  };
+
+  // --- COMPRA LOGIC ---
+  const handleEntradaSearch = (q: string) => {
+    setEntradaSearch(q);
+    if (!q) { setEntradaDropdown([]); return; }
+    setEntradaDropdown(products.filter(p => p.codigo.toLowerCase().includes(q.toLowerCase()) || p.nombre.toLowerCase().includes(q.toLowerCase())).slice(0, 5));
+  };
+
+  const addToEntrada = (p: Product) => {
+    if (entradaForm.items.some(i => i.codigo === p.codigo)) return;
+    setEntradaForm({ ...entradaForm, items: [...entradaForm.items, { 
+      codigo: p.codigo, nombre: p.nombre, cantidad: 1, costo: p.costoActual, subtotal: p.costoActual 
+    }]});
+    setEntradaSearch('');
+    setEntradaDropdown([]);
+  };
+
+  const processEntrada = () => {
+    if (!entradaForm.nroFactura || entradaForm.items.length === 0) { notify('Faltan datos de factura o items', 'warning'); return; }
+    const updatedProducts = [...products];
+    const newMovements: InventoryMovement[] = [];
+    let totalFactura = 0;
+
+    entradaForm.items.forEach(item => {
+      const idx = updatedProducts.findIndex(p => p.codigo === item.codigo);
+      if (idx !== -1) {
+        const p = updatedProducts[idx];
+        const stockPrev = p.stock;
+        const nuevoCosto = item.costo;
+        const nuevaCant = item.cantidad;
+        
+        // Recalcular CPP: (StockAnt * CostoAnt + CantNueva * CostoNuevo) / StockTotal
+        const costoPromedio = ((p.stock * p.costoPromedio) + (nuevaCant * nuevoCosto)) / (p.stock + nuevaCant);
+        
+        p.costoAnterior = p.costoActual;
+        p.costoActual = nuevoCosto;
+        p.costoPromedio = Math.round(costoPromedio * 100) / 100;
+        p.stock += nuevaCant;
+        totalFactura += (item.costo * item.cantidad);
+
+        newMovements.push({
+          id: uuidv4(),
+          fecha: new Date().toISOString(),
+          codigoProducto: p.codigo,
+          tipo: 'ENTRADA',
+          cantidad: nuevaCant,
+          stockPrevio: stockPrev,
+          stockNuevo: p.stock,
+          costo: nuevoCosto,
+          referencia: `COMPRA-${entradaForm.nroFactura}`,
+          comentario: `Ingreso por compra al proveedor ${entradaForm.proveedor}`,
+          usuario: config.vendedor
+        });
+      }
+    });
+
+    if (entradaForm.credito) {
+      setAccounts(prev => [...prev, {
+        id: uuidv4(),
+        entidad: entradaForm.proveedor || 'Proveedor Desconocido',
+        montoTotal: totalFactura,
+        montoPagado: 0,
+        fechaEmision: new Date().toLocaleDateString(),
+        estado: 'Pendiente',
+        referencia: `FACT-${entradaForm.nroFactura}`,
+        tipo: 'CXP'
+      }]);
+    }
+
+    setProducts(updatedProducts);
+    setMovements(prev => [...prev, ...newMovements]);
+    notify(`✅ Entrada ${entradaForm.nroFactura} procesada`);
+    onClose();
+  };
+
+  // --- AJUSTE LOGIC ---
+  const processAjuste = () => {
+    if (!ajusteForm.codigo) { notify('Seleccione un producto', 'error'); return; }
+    const idx = products.findIndex(p => p.codigo === ajusteForm.codigo);
+    if (idx === -1) return;
+    const p = { ...products[idx] };
+    const stockPrev = p.stock;
+    const diff = ajusteForm.tipo === 'ENTRADA' ? ajusteForm.cantidad : -ajusteForm.cantidad;
+    p.stock += diff;
+
+    const newMovements = [...movements, {
+      id: uuidv4(),
+      fecha: new Date().toISOString(),
+      codigoProducto: p.codigo,
+      tipo: 'AJUSTE' as any,
+      cantidad: diff,
+      stockPrevio: stockPrev,
+      stockNuevo: p.stock,
+      costo: p.costoPromedio,
+      referencia: 'AJUSTE MANUAL',
+      comentario: `${ajusteForm.motivo}: ${ajusteForm.comentario}`,
+      usuario: config.vendedor
+    }];
+
+    const updatedProducts = [...products];
+    updatedProducts[idx] = p;
+    setProducts(updatedProducts);
+    setMovements(newMovements);
+    notify('✅ Ajuste realizado');
     onClose();
   };
 
@@ -342,15 +466,133 @@ export function Modals({
     else { setPaymentState(prev => ({ ...prev, amount: Math.round(missingUsd * config.tasa * 100) / 100 })); }
   };
 
-  if (!activeModal && !lastSale) return null;
+  if (!activeModal && !lastSale && !viewSale) return null;
 
   const totalVentaUsd = cart.reduce((acc, item) => acc + (item.precioUsd * item.cantidad * (1 + item.iva / 100)), 0);
   const faltanteUsd = Math.max(0, totalVentaUsd - paymentState.totalPaidUsd);
   const vueltoUsd = Math.max(0, paymentState.totalPaidUsd - totalVentaUsd);
 
   return (
-    <div className={`modal-overlay ${activeModal || lastSale ? 'active' : ''}`} onClick={() => { if(!lastSale) onClose(); else setLastSale(null); }}>
+    <div className={`modal-overlay ${activeModal || lastSale || viewSale ? 'active' : ''}`} onClick={() => { if(!lastSale && !viewSale) onClose(); else { setLastSale(null); setViewSale(null); } }}>
       
+      {activeModal === 'modalDetalleVenta' && viewSale && (
+        <div className="modal-window large" onClick={e => e.stopPropagation()}>
+          <div className="modal-titlebar">
+            <span>🧾 DETALLE DE FACTURA: {viewSale.numero}</span>
+            <span className="modal-close" onClick={() => setViewSale(null)}>✕</span>
+          </div>
+          <div className="modal-body space-y-4">
+            <div className="settings-section">
+              <div className="grid grid-cols-2 gap-4">
+                <div><strong>Cliente:</strong> {viewSale.cliente}</div>
+                <div><strong>RIF:</strong> {viewSale.rif}</div>
+                <div><strong>Fecha:</strong> {new Date(viewSale.fecha).toLocaleString()}</div>
+                <div><strong>Estado:</strong> {viewSale.estado}</div>
+              </div>
+            </div>
+            <div className="table-responsive" style={{ maxHeight: '200px' }}>
+              <table className="data-table">
+                <thead><tr><th>Producto</th><th>Cant</th><th>Precio USD</th><th>Total</th></tr></thead>
+                <tbody>
+                  {viewSale.items.map((it, i) => (
+                    <tr key={i}><td>{it.descripcion}</td><td>{it.cantidad}</td><td>${it.precioUsd.toFixed(2)}</td><td>${(it.cantidad * it.precioUsd).toFixed(2)}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex justify-end gap-4 font-bold text-lg">
+              <span>Total USD: ${viewSale.totalUsd.toFixed(2)}</span>
+              <span>Total Bs: {viewSale.totalBs.toFixed(2)}</span>
+            </div>
+          </div>
+          <div className="modal-footer">
+             <button className="btn btn-primary" onClick={() => window.print()}>🖨️ REIMPRIMIR</button>
+             <button className="btn" onClick={() => setViewSale(null)}>Cerrar</button>
+          </div>
+        </div>
+      )}
+
+      {activeModal === 'modalEntrada' && (
+        <div className="modal-window xlarge" onClick={e => e.stopPropagation()}>
+          <div className="modal-titlebar">
+            <span>📥 RECEPCIÓN DE MERCANCÍA / COMPRA</span>
+            <span className="modal-close" onClick={onClose}>✕</span>
+          </div>
+          <div className="modal-body space-y-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div className="form-group"><label>Proveedor:</label><input type="text" value={entradaForm.proveedor} onChange={e => setEntradaForm({...entradaForm, proveedor: e.target.value})} className="win-input" /></div>
+              <div className="form-group"><label>Nro Factura:</label><input type="text" value={entradaForm.nroFactura} onChange={e => setEntradaForm({...entradaForm, nroFactura: e.target.value})} className="win-input font-bold" /></div>
+              <div className="form-group"><label>Tasa Factura:</label><input type="number" step="0.01" value={entradaForm.tasa} onChange={e => setEntradaForm({...entradaForm, tasa: parseFloat(e.target.value) || 0})} className="win-input" /></div>
+            </div>
+            <div className="search-section relative">
+              <label>Añadir Item:</label>
+              <input type="text" value={entradaSearch} onChange={e => handleEntradaSearch(e.target.value)} className="win-input flex-1" placeholder="Buscar por código o nombre..." />
+              {entradaDropdown.length > 0 && (
+                <div className="search-dropdown active">
+                  {entradaDropdown.map(p => (
+                    <div key={p.codigo} className="search-dropdown-item" onClick={() => addToEntrada(p)}>
+                      <strong>{p.codigo}</strong> - {p.nombre} (Costo Actual: ${p.costoActual})
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="table-responsive h-64">
+              <table className="data-table">
+                <thead><tr><th>Producto</th><th>Cantidad</th><th>Costo USD</th><th>Subtotal</th><th>Acciones</th></tr></thead>
+                <tbody>
+                  {entradaForm.items.map((item, i) => (
+                    <tr key={i}>
+                      <td>{item.nombre}</td>
+                      <td><input type="number" value={item.cantidad} onChange={e => {
+                        const its = [...entradaForm.items]; its[i].cantidad = parseInt(e.target.value) || 0; its[i].subtotal = its[i].cantidad * its[i].costo;
+                        setEntradaForm({...entradaForm, items: its});
+                      }} className="win-input w-20" /></td>
+                      <td><input type="number" step="0.01" value={item.costo} onChange={e => {
+                        const its = [...entradaForm.items]; its[i].costo = parseFloat(e.target.value) || 0; its[i].subtotal = its[i].cantidad * its[i].costo;
+                        setEntradaForm({...entradaForm, items: its});
+                      }} className="win-input w-24" /></td>
+                      <td style={{ textAlign: 'right' }}>${item.subtotal.toFixed(2)}</td>
+                      <td><button className="btn text-red-600" onClick={() => setEntradaForm({...entradaForm, items: entradaForm.items.filter((_, idx) => idx !== i)})}>🗑️</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex justify-between items-center bg-gray-300 p-2">
+               <label className="checkbox-label"><input type="checkbox" checked={entradaForm.credito} onChange={e => setEntradaForm({...entradaForm, credito: e.target.checked})} /> ¿Compra a Crédito?</label>
+               <div className="text-xl font-bold">Total Compra: ${entradaForm.items.reduce((s, i) => s + i.subtotal, 0).toFixed(2)}</div>
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button className="btn" onClick={onClose}>Cancelar</button>
+            <button className="btn btn-success" onClick={processEntrada}>💾 PROCESAR ENTRADA</button>
+          </div>
+        </div>
+      )}
+
+      {activeModal === 'modalAjuste' && (
+        <div className="modal-window" onClick={e => e.stopPropagation()} style={{ width: '350px' }}>
+          <div className="modal-titlebar"><span>🔧 AJUSTE DE INVENTARIO</span><span className="modal-close" onClick={onClose}>✕</span></div>
+          <div className="modal-body space-y-4">
+            <div className="form-group">
+              <label>Producto:</label>
+              <select value={ajusteForm.codigo} onChange={e => setAjusteForm({...ajusteForm, codigo: e.target.value})} className="win-input">
+                <option value="">-- Seleccionar --</option>
+                {products.map(p => <option key={p.codigo} value={p.codigo}>{p.nombre} ({p.codigo})</option>)}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="form-group"><label>Tipo:</label><select value={ajusteForm.tipo} onChange={e => setAjusteForm({...ajusteForm, tipo: e.target.value as any})} className="win-input"><option value="ENTRADA">Entrada</option><option value="SALIDA">Salida</option></select></div>
+              <div className="form-group"><label>Cantidad:</label><input type="number" value={ajusteForm.cantidad} onChange={e => setAjusteForm({...ajusteForm, cantidad: parseInt(e.target.value) || 0})} className="win-input" /></div>
+            </div>
+            <div className="form-group"><label>Motivo:</label><select value={ajusteForm.motivo} onChange={e => setAjusteForm({...ajusteForm, motivo: e.target.value})} className="win-input"><option value="Diferencia de Inventario">Diferencia de Inventario</option><option value="Muestra / Prueba">Muestra / Prueba</option><option value="Daño / Avería">Daño / Avería</option><option value="Vencimiento">Vencimiento</option></select></div>
+            <div className="form-group"><label>Comentario:</label><textarea value={ajusteForm.comentario} onChange={e => setAjusteForm({...ajusteForm, comentario: e.target.value})} className="win-input" /></div>
+          </div>
+          <div className="modal-footer"><button className="btn" onClick={onClose}>Cancelar</button><button className="btn btn-primary" onClick={processAjuste}>APLICAR AJUSTE</button></div>
+        </div>
+      )}
+
       {activeModal === 'modalProveedor' && (
         <div className="modal-window large" onClick={e => e.stopPropagation()}>
           <div className="modal-titlebar">

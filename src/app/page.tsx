@@ -171,7 +171,7 @@ export default function POSPage() {
         <ProductsModule active={activeModule === 'productos'} onOpenModal={openModal} products={products} tasa={config.tasa} notify={notify} />
         <ClientsModule active={activeModule === 'clientes'} onOpenModal={openModal} clients={clients} setClients={setClients} notify={notify} />
         <ProvidersModule active={activeModule === 'proveedores'} onOpenModal={openModal} providers={providers} setProviders={setProviders} notify={notify} />
-        <SalesModule active={activeModule === 'ventas'} sales={sales} setSales={setSales} products={products} setProducts={setProducts} notify={notify} />
+        <SalesModule active={activeModule === 'ventas'} sales={sales} setSales={setSales} products={products} setProducts={setProducts} movements={movements} setMovements={setMovements} notify={notify} onOpenModal={openModal} config={config} />
         <InventoryModule active={activeModule === 'inventario'} onOpenModal={openModal} products={products} movements={movements} />
         <ReportsModule active={activeModule === 'reportes'} sales={sales} products={products} clients={clients} config={config} />
         <AccountsModule active={activeModule === 'cuentas'} accounts={accounts} movements={movements} />
