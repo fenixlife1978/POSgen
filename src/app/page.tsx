@@ -22,7 +22,7 @@ import { Product, Client, Provider, Sale, Account, CartItem, User, InventoryMove
 export default function POSPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [loginData, setLoginData] = useState({ email: '', password: '' });
+  const [loginData, setLoginData] = useState({ email: '', password: '', role: 'Administrador' });
   const [activeModule, setActiveModule] = useState('pos');
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -60,12 +60,22 @@ export default function POSPage() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        setIsLoggedIn(true);
-        // Obtener el perfil del usuario desde Firestore
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          setCurrentUser(userDoc.data());
-          setConfig(prev => ({ ...prev, vendedor: userDoc.data().name || user.email }));
+        try {
+          // Intentar obtener el perfil del usuario desde Firestore
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            setCurrentUser(userData);
+            setConfig(prev => ({ ...prev, vendedor: userData.name || user.email }));
+            setIsLoggedIn(true);
+          } else {
+            // Si el perfil no existe, pero hay sesión de Auth (bootstrap case)
+            setCurrentUser({ email: user.email, role: 'Administrador', name: 'Administrador' });
+            setIsLoggedIn(true);
+          }
+        } catch (error) {
+          console.error("Error al cargar perfil de usuario:", error);
+          setIsLoggedIn(true); // Permitir acceso básico si hay sesión
         }
       } else {
         setIsLoggedIn(false);
@@ -121,10 +131,32 @@ export default function POSPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await signInWithEmailAndPassword(auth, loginData.email, loginData.password);
-      notify('Bienvenido al sistema');
-    } catch (error) {
-      notify('Error de acceso. Verifique sus credenciales.', 'error');
+      // 1. Autenticar en Firebase Auth
+      const userCredential = await signInWithEmailAndPassword(auth, loginData.email, loginData.password);
+      const user = userCredential.user;
+
+      // 2. Verificar el Rol en Firestore
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        if (userData.role !== loginData.role) {
+          await signOut(auth);
+          notify(`Acceso denegado: El usuario no tiene el rol de ${loginData.role}`, 'error');
+          return;
+        }
+      } else {
+        // Permitir primer acceso de admin si no existe perfil en Firestore
+        if (loginData.email === 'admin@sistema.com' && loginData.role !== 'Administrador') {
+          await signOut(auth);
+          notify('El administrador principal debe seleccionar el rol de Administrador', 'error');
+          return;
+        }
+      }
+
+      notify('Acceso concedido. Cargando sistema...');
+    } catch (error: any) {
+      console.error(error);
+      notify('Error de acceso. Verifique sus credenciales y el rol seleccionado.', 'error');
     }
   };
 
@@ -158,15 +190,27 @@ export default function POSPage() {
           <div className="login-title">Acceso Nube - POS Pro</div>
           <form onSubmit={handleLogin}>
             <div className="form-group">
-              <label>Email:</label>
+              <label>Correo Electrónico:</label>
               <input 
                 type="email" 
                 required 
                 value={loginData.email} 
                 onChange={e => setLoginData({...loginData, email: e.target.value})} 
-                placeholder="usuario@dominio.com"
+                placeholder="ejemplo@sistema.com"
                 autoFocus 
               />
+            </div>
+            <div className="form-group">
+              <label>Rol de Usuario:</label>
+              <select 
+                value={loginData.role} 
+                onChange={e => setLoginData({...loginData, role: e.target.value})}
+                className="win-input"
+              >
+                <option value="Administrador">Administrador</option>
+                <option value="Supervisor">Supervisor</option>
+                <option value="Cajero">Cajero</option>
+              </select>
             </div>
             <div className="form-group">
               <label>Contraseña:</label>
@@ -179,7 +223,7 @@ export default function POSPage() {
               />
             </div>
             <div style={{ marginTop: '20px', textAlign: 'right' }}>
-              <button type="submit" className="btn btn-primary">Entrar al Sistema</button>
+              <button type="submit" className="btn btn-primary">Iniciar Sesión</button>
             </div>
           </form>
           <div id="notification" className="notification"></div>
@@ -193,7 +237,7 @@ export default function POSPage() {
       <div id="notification" className="notification"></div>
       <div className="dollar-bar">
         <span>💲 TASA BCV: <strong>{config.tasa.toFixed(2)}</strong></span>
-        <span style={{ marginLeft: 'auto', fontSize: '11px' }}>{config.nombreEmpresa} | Sesión: {currentUser?.name || auth.currentUser?.email}</span>
+        <span style={{ marginLeft: 'auto', fontSize: '11px' }}>{config.nombreEmpresa} | Sesión: {currentUser?.name || auth.currentUser?.email} ({currentUser?.role})</span>
       </div>
       <div className="nav-tabs">
         {[
@@ -208,11 +252,17 @@ export default function POSPage() {
           { id: 'cuentas', label: 'Cuentas' },
           { id: 'usuarios', label: 'Usuarios' },
           { id: 'config', label: 'Configuración' }
-        ].map(m => (
-          <div key={m.id} className={`nav-tab ${activeModule === m.id ? 'active' : ''}`} onClick={() => setActiveModule(m.id)}>
-            {m.label}
-          </div>
-        ))}
+        ].map(m => {
+          // Restricción básica de permisos en pestañas
+          if (m.id === 'usuarios' && currentUser?.role !== 'Administrador') return null;
+          if (m.id === 'config' && currentUser?.role !== 'Administrador') return null;
+          
+          return (
+            <div key={m.id} className={`nav-tab ${activeModule === m.id ? 'active' : ''}`} onClick={() => setActiveModule(m.id)}>
+              {m.label}
+            </div>
+          );
+        })}
       </div>
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
         <PosModule active={activeModule === 'pos'} onOpenModal={openModal} products={products} clients={clients} cart={posCart} setCart={setPosCart} config={config} notify={notify} selectedRow={selectedRow} setSelectedRow={setSelectedRow} />
