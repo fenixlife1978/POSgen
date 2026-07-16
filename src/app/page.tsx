@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -168,12 +167,29 @@ export default function POSPage() {
         <span> Último Doc: {sales.length > 0 ? sales[sales.length-1].numero : '--'}</span>
       </div>
       <Modals 
-        activeModal={activeModal} onClose={closeModal} products={products} setProducts={setProducts} 
-        clients={clients} setClients={setClients} sales={sales} setSales={setSales} 
-        accounts={accounts} setAccounts={setAccounts} presupuestos={setPresupuestos} 
-        cart={posCart} setCart={setPosCart} config={config} setConfig={setConfig} notify={notify} 
-        selectedRow={selectedRow} editingId={editingId} users={users} setUsers={setUsers}
-        movements={movements} setMovements={setMovements}
+        activeModal={activeModal} 
+        onClose={closeModal} 
+        onOpenModal={openModal}
+        products={products} 
+        setProducts={setProducts} 
+        clients={clients} 
+        setClients={setClients} 
+        sales={sales} 
+        setSales={setSales} 
+        accounts={accounts} 
+        setAccounts={setAccounts} 
+        presupuestos={setPresupuestos} 
+        cart={posCart} 
+        setCart={setPosCart} 
+        config={config} 
+        setConfig={setConfig} 
+        notify={notify} 
+        selectedRow={selectedRow} 
+        editingId={editingId} 
+        users={users} 
+        setUsers={setUsers}
+        movements={movements} 
+        setMovements={setMovements}
       />
     </div>
   );
