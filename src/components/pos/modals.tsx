@@ -95,6 +95,11 @@ export function Modals({
   const [lastSale, setLastSale] = useState<Sale | null>(null);
   const [viewSale, setViewSale] = useState<Sale | null>(null);
 
+  const initialUser: User = {
+    id: '', username: '', password: '', name: '', email: '', role: 'Cajero', active: true
+  };
+  const [userForm, setUserForm] = useState<User>(initialUser);
+
   useEffect(() => {
     if (activeModal === 'modalProducto' && editingId !== null) {
       const prod = products[editingId];
@@ -147,6 +152,10 @@ export function Modals({
 
     if (activeModal === 'modalAjuste') {
       setAjusteForm({ codigo: '', tipo: 'ENTRADA', cantidad: 1, motivo: 'Diferencia de Inventario', comentario: '' });
+    }
+
+    if (activeModal === 'modalNuevoUsuario') {
+      setUserForm(initialUser);
     }
   }, [activeModal, editingId, products, clients, providers, config.tasa, sales]);
 
@@ -476,9 +485,13 @@ export function Modals({
     else { setPaymentState(prev => ({ ...prev, amount: Math.round(missingUsd * config.tasa * 100) / 100 })); }
   };
 
+  const totalVentaUsd = cart.reduce((acc, item) => acc + (item.precioUsd * item.cantidad * (1 + item.iva / 100)), 0);
+  const totalPaidUsd = paymentState.totalPaidUsd;
+  const faltanteUsd = Math.max(0, totalVentaUsd - totalPaidUsd);
+  const vueltoUsd = Math.max(0, totalPaidUsd - totalVentaUsd);
+
   if (!activeModal && !lastSale && !viewSale) return null;
 
-  const totalVentaUsd = cart.reduce((acc, item) => acc + (item.precioUsd * item.cantidad * (1 + item.iva / 100)), 0);
   const totalEntradaUsd = entradaForm.items.reduce((s, i) => s + i.subtotal, 0);
   const pagoRealizadoUsd = entradaForm.pagoContadoUsd + (entradaForm.pagoContadoBs / entradaForm.tasa);
   const pendienteUsd = Math.max(0, totalEntradaUsd - pagoRealizadoUsd);
@@ -1081,6 +1094,54 @@ export function Modals({
             <button className="btn btn-primary flex gap-2" onClick={handleSaveProduct}>
               <Save size={14}/> GUARDAR FICHA
             </button>
+          </div>
+        </div>
+      )}
+
+      {activeModal === 'modalNuevoUsuario' && (
+        <div className="modal-window" onClick={e => e.stopPropagation()} style={{ width: '400px' }}>
+          <div className="modal-titlebar">
+            <span>👤 REGISTRO DE NUEVO USUARIO</span>
+            <span className="modal-close" onClick={onClose}>✕</span>
+          </div>
+          <div className="modal-body space-y-4">
+            <div className="settings-section">
+              <div className="form-group">
+                <label>Nombre Completo:</label>
+                <input type="text" value={userForm.name} onChange={e => setUserForm({...userForm, name: e.target.value})} className="win-input" />
+              </div>
+              <div className="form-group">
+                <label>Correo Electrónico:</label>
+                <input type="email" value={userForm.email} onChange={e => setUserForm({...userForm, email: e.target.value, username: e.target.value})} className="win-input" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="form-group">
+                  <label>Rol / Permisos:</label>
+                  <select value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value as any})} className="win-input">
+                    <option value="Administrador">Administrador</option>
+                    <option value="Supervisor">Supervisor</option>
+                    <option value="Cajero">Cajero</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Contraseña:</label>
+                  <input type="password" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} className="win-input" />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button className="btn" onClick={onClose}>Cancelar</button>
+            <button className="btn btn-primary" onClick={() => {
+              if(!userForm.name || !userForm.password || !userForm.email) {
+                notify('❌ Todos los campos son obligatorios', 'error');
+                return;
+              }
+              const newUser = { ...userForm, id: uuidv4() };
+              setUsers([...users, newUser]);
+              notify('✅ Usuario creado correctamente');
+              onClose();
+            }}>💾 GUARDAR USUARIO</button>
           </div>
         </div>
       )}
