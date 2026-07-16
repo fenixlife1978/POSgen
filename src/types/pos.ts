@@ -1,4 +1,3 @@
-
 export interface Product {
   codigo: string;
   descripcion: string;
@@ -8,26 +7,20 @@ export interface Product {
   marca: string;
   unidad: string;
   moneda: 'base' | 'alterna';
-  
-  // Clasificación
   departamento: string;
   categoria: string;
   grupo?: string;
   subgrupo?: string;
   ubicacion: string;
-  
-  // Costos y Precios
   costoAnterior: number;
   costoActual: number;
-  costoPromedio: number; // CPP
-  utilidadPorcentaje: number; // % utilidad financiera (Markup sobre venta)
-  precio1: number; // Detal
-  precio2: number; // Mayor
-  precio3: number; // Corporativo
-  precio4: number; // Promoción
+  costoPromedio: number;
+  utilidadPorcentaje: number;
+  precio1: number;
+  precio2: number;
+  precio3: number;
+  precio4: number;
   ivaAlicuota: number;
-  
-  // Controles
   permiteDescuento: boolean;
   activo: boolean;
   manejaSeriales: boolean;
@@ -36,15 +29,12 @@ export interface Product {
   manejaTallasColores: boolean;
   capacidadContenido?: number;
   manejaPeso: boolean;
-  
-  // Lógica Kit
   isKit: boolean;
-  stockPropio: boolean; // True = Físico, False = Virtual (depende de componentes)
+  stockPropio: boolean;
   kitComponents: KitComponent[];
-  
-  // Existencias
   stock: number;
   stockMin: number;
+  iva: number;
 }
 
 export interface KitComponent {
@@ -113,4 +103,13 @@ export interface Presupuesto {
   items: CartItem[];
   totalUsd: number;
   estado: 'Pendiente' | 'Aprobado';
+}
+
+export interface User {
+  id: string;
+  username: string;
+  password: string;
+  name: string;
+  role: 'Administrador' | 'Supervisor' | 'Cajero';
+  active: boolean;
 }

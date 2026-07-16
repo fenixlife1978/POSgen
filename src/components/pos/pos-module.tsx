@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -91,40 +90,40 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
   };
 
   return (
-    <div id="module-pos" className="module-panel active" style={{ display: 'flex', flexDirection: 'column', padding: 0 }}>
+    <div id="module-pos" className="module-panel active">
       <div className="header-section">
         <div className="header-row">
-          <label>Rif:</label>
-          <input type="text" id="posRif" value={clientInfo.rif} onChange={(e) => handleRifSearch(e.target.value)} placeholder="V-00000000-0" style={{ width: '160px' }} />
-          <label className="checkbox-label"><input type="checkbox" id="posCredito" /> Crédito</label>
-          <label>N/Vendedor:</label>
-          <span className="vendedor-name" id="posVendedor">{config.vendedor}</span>
-          <div className="header-buttons">
-            <button onClick={() => onOpenModal('modalRecuperar')}>📄 Recuperar Documento</button>
-            <button onClick={() => onOpenModal('modalDescuento')}>🏷️ Aplicar Dscto</button>
+          <label style={{fontWeight:'bold'}}>Rif:</label>
+          <input type="text" value={clientInfo.rif} onChange={(e) => handleRifSearch(e.target.value)} placeholder="V-00000000-0" style={{ width: '120px' }} />
+          <label style={{display:'flex', alignItems:'center', gap:'4px'}}><input type="checkbox" /> Crédito</label>
+          <label style={{fontWeight:'bold', marginLeft:'10px'}}>N/Vendedor:</label>
+          <span className="vendedor-name">{config.vendedor}</span>
+          <div style={{marginLeft:'auto', display:'flex', gap:'4px'}}>
+            <button className="btn" style={{padding:'2px 8px', fontSize:'11px'}} onClick={() => onOpenModal('modalRecuperar')}>Recuperar Documento</button>
+            <button className="btn" style={{padding:'2px 8px', fontSize:'11px'}} onClick={() => onOpenModal('modalDescuento')}>Aplicar Dscto</button>
           </div>
-          <div className="datetime-display" id="datetimeDisplay">{dateTime}</div>
+          <div style={{color:'#008000', fontWeight:'bold', marginLeft:'10px'}}>{dateTime}</div>
         </div>
         <div className="header-row">
-          <label>Cliente:</label>
-          <input type="text" id="posCliente" value={clientInfo.name} onChange={(e) => setClientInfo({...clientInfo, name: e.target.value})} placeholder="Nombre del cliente..." style={{ flex: 1, minWidth: '200px' }} />
-          <label>Saldo:</label>
-          <span className="saldo-val" id="posSaldo">{clientInfo.saldo.toFixed(2)}</span>
+          <label style={{fontWeight:'bold'}}>Cliente:</label>
+          <input type="text" value={clientInfo.name} onChange={(e) => setClientInfo({...clientInfo, name: e.target.value})} placeholder="Nombre del cliente..." style={{ flex: 1 }} />
+          <label style={{fontWeight:'bold'}}>Saldo:</label>
+          <span style={{background:'#eee', padding:'2px 8px', border:'1px solid #808080', minWidth:'80px', textAlign:'right'}}>{clientInfo.saldo.toFixed(2)}</span>
         </div>
       </div>
 
       <div className="search-section" style={{ position: 'relative' }}>
-        <label>Busqueda:</label>
+        <label style={{fontWeight:'bold'}}>Búsqueda:</label>
         <input 
           type="text" 
-          id="posBusqueda" 
+          style={{flex: 1}}
           value={searchTerm}
           onChange={(e) => handleSearch(e.target.value)}
           placeholder="Código, nombre o descripción..." 
         />
-        <label className="equiv-label">Equivalente:</label>
-        <input type="text" className="equiv-input" id="posEquivalente" value={formatBS(totals.totalBs)} readOnly />
-        <button className="copy-btn">📋 Copiar</button>
+        <label style={{fontWeight:'bold', marginLeft:'10px'}}>Equivalente:</label>
+        <input type="text" style={{width:'150px', background:'#eee', fontWeight:'bold'}} value={formatBS(totals.totalBs)} readOnly />
+        <button className="btn" style={{padding:'2px 8px'}}>📋 Copiar</button>
         
         {searchDropdown.length > 0 && (
           <div className="search-dropdown active">
@@ -139,15 +138,15 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
 
       <div className="main-content">
         <div className="table-container">
-          <table className="product-table" id="posTable">
+          <table className="product-table">
             <thead>
               <tr>
-                <th style={{ width: '40px' }}>#</th>
+                <th style={{ width: '30px' }}>#</th>
                 <th>Descripcion</th>
-                <th style={{ width: '90px' }}>Oferta USD</th>
-                <th style={{ width: '60px' }}>Cant</th>
-                <th style={{ width: '110px' }}>Precio</th>
-                <th style={{ width: '110px' }}>Total+Iva</th>
+                <th style={{ width: '80px', textAlign:'right' }}>Oferta USD</th>
+                <th style={{ width: '50px', textAlign:'center' }}>Cant</th>
+                <th style={{ width: '100px', textAlign:'right' }}>Precio</th>
+                <th style={{ width: '100px', textAlign:'right' }}>Total+Iva</th>
               </tr>
             </thead>
             <tbody>
@@ -155,10 +154,10 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
                 <tr key={i} className={selectedRow === i ? 'selected' : ''} onClick={() => setSelectedRow(i)}>
                   <td>{i + 1}</td>
                   <td>{item.codigo} - {item.descripcion}</td>
-                  <td className="col-oferta">{item.precioUsd.toFixed(2)}</td>
-                  <td className="col-cant">{item.cantidad}</td>
-                  <td className="col-precio">{(item.precioUsd * item.cantidad).toFixed(2)}</td>
-                  <td className="col-total">{(item.precioUsd * item.cantidad * (1 + item.iva / 100)).toFixed(2)}</td>
+                  <td style={{textAlign:'right'}}>{item.precioUsd.toFixed(2)}</td>
+                  <td style={{textAlign:'center'}}>{item.cantidad}</td>
+                  <td style={{textAlign:'right'}}>{(item.precioUsd * item.cantidad).toFixed(2)}</td>
+                  <td style={{textAlign:'right'}}>{(item.precioUsd * item.cantidad * (1 + item.iva / 100)).toFixed(2)}</td>
                 </tr>
               ))}
               {cart.length === 0 && (
@@ -203,19 +202,18 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
         <div className="total-box total-bs">
           <span className="total-label">Total Bs:</span>
           <div className="total-value">{totals.totalBs.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</div>
-          <span className="total-label-sub">CAMBIO ULTIMA FACTURA</span>
         </div>
         <div className="total-box dolar-igtf">
           <span className="total-label">DOLAR+IGTF:</span>
           <div className="total-value">{(totals.totalUsd * (1 + config.igtf / 100)).toFixed(2)}</div>
         </div>
         <div className="total-box divisas">
-          <span className="total-label">DIVISAS:</span>
+          <span className="total-label">DIVISAS (USD):</span>
           <div className="total-value">{totals.totalUsd.toFixed(2)}</div>
         </div>
-        <div className="items-count">
-          <span>Item(s): <strong>{cart.length}</strong></span>
-          <span>Unidad(es): <strong>{cart.reduce((s, i) => s + i.cantidad, 0)}</strong></span>
+        <div style={{marginLeft:'auto', display:'flex', gap:'15px', paddingRight:'10px', fontSize:'12px', fontWeight:'bold'}}>
+          <span>Item(s): <strong style={{color:'#000080'}}>{cart.length}</strong></span>
+          <span>Unidad(es): <strong style={{color:'#000080'}}>{cart.reduce((s, i) => s + i.cantidad, 0)}</strong></span>
         </div>
       </div>
     </div>
