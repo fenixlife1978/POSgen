@@ -100,7 +100,7 @@ body {
   flex: 1;
   display: none;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto; /* Permite scroll para ver el botón de guardado */
   padding: 8px;
   background: #c0c0c0;
 }

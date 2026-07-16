@@ -54,7 +54,21 @@ export function ConfigModule({ active, onOpenModal, config, setConfig, notify }:
 
   return (
     <div id="module-config" className="module-panel active">
-      <h2 style={{ color: '#000080', marginBottom: '12px' }}>⚙️ Configuración del Sistema</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 style={{ color: '#000080' }}>⚙️ Configuración del Sistema</h2>
+        <button 
+          className="btn btn-primary" 
+          onClick={handleSave}
+          style={{ boxShadow: '2px 2px 0 #000' }}
+        >
+          💾 GUARDAR CAMBIOS
+        </button>
+      </div>
+
+      <div className="toolbar">
+        <button onClick={handleSave}>💾 Guardar Todo</button>
+        <button onClick={() => window.location.reload()}>🔄 Recargar</button>
+      </div>
 
       <div className="settings-section">
         <h3>💱 Tasa de Cambio & Impuestos</h3>
@@ -176,7 +190,7 @@ export function ConfigModule({ active, onOpenModal, config, setConfig, notify }:
         </div>
       </div>
 
-      <div style={{ textAlign: 'center', marginTop: '20px', paddingBottom: '20px' }}>
+      <div style={{ textAlign: 'center', marginTop: '20px', paddingBottom: '40px' }}>
         <button 
           className="btn btn-primary" 
           style={{ padding: '12px 60px', fontSize: '16px', boxShadow: '2px 2px 0 #000' }}
