@@ -2,8 +2,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, collectionGroup, query, orderBy, limit } from 'firebase/firestore';
+import { db, auth } from '@/lib/firebase';
+import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
+import { collection, onSnapshot, doc, collectionGroup, query, orderBy, limit, getDoc } from 'firebase/firestore';
 import { PosModule } from '@/components/pos/pos-module';
 import { DashboardModule } from '@/components/pos/dashboard-module';
 import { ProductsModule } from '@/components/pos/products-module';
@@ -20,7 +21,8 @@ import { Product, Client, Provider, Sale, Account, CartItem, User, InventoryMove
 
 export default function POSPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [loginData, setLoginData] = useState({ email: '', username: '', password: '' });
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [loginData, setLoginData] = useState({ email: '', password: '' });
   const [activeModule, setActiveModule] = useState('pos');
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -47,16 +49,36 @@ export default function POSPage() {
     direccion: 'Av. Principal Local 10, Caracas',
     telefono: '0412-0000000',
     vendedor: 'ADMIN',
-    vVendedores: ['ADMIN', 'CAJERO 01', 'CAJERO 02'],
+    vVendedores: ['ADMIN'],
     reportZCounter: 1,
     grandTotalHistory: 0,
     lastZDate: null as string | null,
     terminalId: 'CAJA-01'
   });
 
+  // Suscripción al estado de Auth
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setIsLoggedIn(true);
+        // Obtener el perfil del usuario desde Firestore
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          setCurrentUser(userDoc.data());
+          setConfig(prev => ({ ...prev, vendedor: userDoc.data().name || user.email }));
+        }
+      } else {
+        setIsLoggedIn(false);
+        setCurrentUser(null);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Suscripción optimizada a Firestore
   useEffect(() => {
-    // Colecciones Principales
+    if (!isLoggedIn) return;
+
     const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
       setProducts(snapshot.docs.map(doc => doc.data() as Product));
     });
@@ -76,7 +98,6 @@ export default function POSPage() {
       setUsers(snapshot.docs.map(doc => doc.data() as User));
     });
 
-    // Auditoría y Configuración (Optimizado en sub-rutas)
     const unsubConfig = onSnapshot(doc(db, 'system', 'config'), (snapshot) => {
       if (snapshot.exists()) {
         setConfig(snapshot.data() as any);
@@ -86,7 +107,6 @@ export default function POSPage() {
       setReportsZ(snapshot.docs.map(doc => doc.data() as ReportZRecord));
     });
 
-    // Movimientos Globales (Ajustes) - Usando Collection Group para ver todos los logs de todos los productos
     const unsubMovements = onSnapshot(query(collectionGroup(db, 'logs'), orderBy('fecha', 'desc'), limit(200)), (snapshot) => {
       setMovements(snapshot.docs.map(doc => doc.data() as InventoryMovement));
     });
@@ -96,24 +116,21 @@ export default function POSPage() {
       unsubProducts(); unsubClients(); unsubProviders(); unsubSales();
       unsubAccounts(); unsubUsers(); unsubMovements(); unsubReportsZ(); unsubConfig();
     };
-  }, []);
+  }, [isLoggedIn]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = users.find(u => 
-      (u.email || "").toLowerCase().trim() === loginData.email.toLowerCase().trim() &&
-      (u.username || "").toLowerCase().trim() === loginData.username.toLowerCase().trim() && 
-      u.password === loginData.password
-    );
-
-    const isAdminDefault = loginData.email === 'admin@sistema.com' && loginData.username === 'Admin' && loginData.password === '123';
-
-    if (user || isAdminDefault) {
-      setIsLoggedIn(true);
-      notify(`Bienvenido, ${user ? user.name : 'Administrador'}`);
-    } else {
-      notify('Credenciales incorrectas. Verifique Email, Usuario y Contraseña.', 'error');
+    try {
+      await signInWithEmailAndPassword(auth, loginData.email, loginData.password);
+      notify('Bienvenido al sistema');
+    } catch (error) {
+      notify('Error de acceso. Verifique sus credenciales.', 'error');
     }
+  };
+
+  const handleLogout = async () => {
+    await signOut(auth);
+    setIsLoggedIn(false);
   };
 
   const notify = (msg: string, type: 'success' | 'error' | 'warning' = 'success') => {
@@ -138,7 +155,7 @@ export default function POSPage() {
     return (
       <div className="login-screen">
         <div className="login-box">
-          <div className="login-title">Acceso al Sistema - POS Pro</div>
+          <div className="login-title">Acceso Nube - POS Pro</div>
           <form onSubmit={handleLogin}>
             <div className="form-group">
               <label>Email:</label>
@@ -147,18 +164,8 @@ export default function POSPage() {
                 required 
                 value={loginData.email} 
                 onChange={e => setLoginData({...loginData, email: e.target.value})} 
-                placeholder="admin@sistema.com"
+                placeholder="usuario@dominio.com"
                 autoFocus 
-              />
-            </div>
-            <div className="form-group">
-              <label>Usuario:</label>
-              <input 
-                type="text" 
-                required 
-                value={loginData.username} 
-                onChange={e => setLoginData({...loginData, username: e.target.value})} 
-                placeholder="Admin"
               />
             </div>
             <div className="form-group">
@@ -168,11 +175,11 @@ export default function POSPage() {
                 required 
                 value={loginData.password} 
                 onChange={e => setLoginData({...loginData, password: e.target.value})} 
-                placeholder="123"
+                placeholder="••••••••"
               />
             </div>
             <div style={{ marginTop: '20px', textAlign: 'right' }}>
-              <button type="submit" className="btn btn-primary">Entrar</button>
+              <button type="submit" className="btn btn-primary">Entrar al Sistema</button>
             </div>
           </form>
           <div id="notification" className="notification"></div>
@@ -186,7 +193,7 @@ export default function POSPage() {
       <div id="notification" className="notification"></div>
       <div className="dollar-bar">
         <span>💲 TASA BCV: <strong>{config.tasa.toFixed(2)}</strong></span>
-        <span style={{ marginLeft: 'auto', fontSize: '11px' }}>{config.nombreEmpresa} | Sistema POS Nube (Firestore Optimizado)</span>
+        <span style={{ marginLeft: 'auto', fontSize: '11px' }}>{config.nombreEmpresa} | Sesión: {currentUser?.name || auth.currentUser?.email}</span>
       </div>
       <div className="nav-tabs">
         {[
@@ -217,14 +224,14 @@ export default function POSPage() {
         <InventoryModule active={activeModule === 'inventario'} onOpenModal={openModal} products={products} movements={movements} />
         <ReportsModule active={activeModule === 'reportes'} sales={sales} products={products} clients={clients} config={config} setConfig={setConfig} setReportsZ={setReportsZ} reportsZ={reportsZ} />
         <AccountsModule active={activeModule === 'cuentas'} accounts={accounts} movements={movements} />
-        <UsersModule active={activeModule === 'usuarios'} users={users} setUsers={setUsers} onOpenModal={openModal} notify={notify} />
+        <UsersModule active={activeModule === 'usuarios'} users={users} onOpenModal={openModal} />
         <ConfigModule active={activeModule === 'config'} onOpenModal={openModal} config={config} setConfig={setConfig} notify={notify} />
       </div>
       <div className="status-bar">
-        <span> Usuario: {loginData.username}</span>
+        <span> Usuario: {currentUser?.name || auth.currentUser?.email}</span>
         <span> Tasa: {config.tasa}</span>
-        <span> Ventas Hoy: {sales.filter(s => new Date(s.fecha).toDateString() === new Date().toDateString() && s.estado === 'Completada').length}</span>
-        <span> Conexión: <span style={{color:'green', fontWeight:'bold'}}>CLOUD SYNC OK</span></span>
+        <button onClick={handleLogout} style={{ border:'none', background:'none', color:'red', cursor:'pointer', fontSize:'11px', padding:'0 10px'}}>CERRAR SESIÓN</button>
+        <span style={{marginLeft:'auto'}}> Conexión: <span style={{color:'green', fontWeight:'bold'}}>CLOUD SYNC OK</span></span>
       </div>
       <Modals 
         activeModal={activeModal} 
