@@ -53,8 +53,24 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
   };
 
   const addToCart = (product: Product) => {
+    // BLOQUEO DE STOCK AGOTADO
+    // Excepción: Kits que no tienen stock propio (Virtuales)
+    const isVirtualKit = product.isKit && !product.stockPropio;
+    
+    if (!isVirtualKit && product.stock <= 0) {
+      notify(`❌ Producto sin existencia: ${product.codigo}`, 'error');
+      setSearchTerm('');
+      setSearchDropdown([]);
+      return;
+    }
+
+    // Validar si ya está en el carrito y si hay stock suficiente para aumentar
     const existing = cart.find(item => item.codigo === product.codigo);
     if (existing) {
+      if (!isVirtualKit && existing.cantidad >= product.stock) {
+        notify(`❌ No hay más stock disponible para ${product.codigo}`, 'error');
+        return;
+      }
       setCart(cart.map(item => item.codigo === product.codigo ? { ...item, cantidad: item.cantidad + 1 } : item));
     } else {
       setCart([...cart, {
@@ -127,11 +143,19 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
         
         {searchDropdown.length > 0 && (
           <div className="search-dropdown active">
-            {searchDropdown.map(p => (
-              <div key={p.codigo} className="search-dropdown-item" onClick={() => addToCart(p)}>
-                <strong>{p.codigo}</strong> - {p.nombre} | <span style={{ color: '#000080' }}>{formatUSD(p.precio1)}</span> | Stock: {p.stock}
-              </div>
-            ))}
+            {searchDropdown.map(p => {
+              const isVirtualKit = p.isKit && !p.stockPropio;
+              const hasStock = isVirtualKit || p.stock > 0;
+              return (
+                <div 
+                  key={p.codigo} 
+                  className={`search-dropdown-item ${!hasStock ? 'opacity-50 grayscale' : ''}`} 
+                  onClick={() => hasStock ? addToCart(p) : notify('❌ Sin existencia', 'error')}
+                >
+                  <strong>{p.codigo}</strong> - {p.nombre} | <span style={{ color: '#000080' }}>{formatUSD(p.precio1)}</span> | Stock: {p.stock} {!hasStock && '(AGOTADO)'}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
