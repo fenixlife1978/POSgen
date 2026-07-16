@@ -159,11 +159,16 @@ export function Modals({
     if (paymentState.amount <= 0) return;
     const totalUsdToPay = getCartTotal();
     let usd = 0; let bs = 0;
-    if (paymentState.method.includes('USD')) {
+    
+    // Identificar si el método es en USD (Efectivo USD o Zelle)
+    const isUsdMethod = paymentState.method === 'Efectivo USD' || paymentState.method === 'Zelle';
+    
+    if (isUsdMethod) {
       usd = paymentState.amount; bs = Math.round(usd * config.tasa * 100) / 100;
     } else {
       bs = paymentState.amount; usd = Math.round((bs / config.tasa) * 100) / 100;
     }
+    
     const newPayments = [...paymentState.payments, { method: paymentState.method, usd, bs }];
     setPaymentState({
       ...paymentState,
@@ -334,7 +339,7 @@ export function Modals({
                 </div>
 
                 <div className="win-window p-4 space-y-3 bg-gray-100">
-                  <h3 className="text-green-800 font-bold border-b border-gray-400 pb-1 mb-2">LOGICA FINANCIERA</h3>
+                  <h3 className="text-green-800 font-bold border-b border-gray-400 pb-1 mb-2">LÓGICA FINANCIERA</h3>
                   <div className="form-group">
                     <label>Costo Promedio (USD):</label>
                     <input 
@@ -622,18 +627,19 @@ export function Modals({
                   onKeyDown={e => handleCalculatorKeyDown(e, 'method')}
                   className="win-input h-10 w-full"
                 >
+                  <option>Efectivo Bs.</option>
                   <option>Efectivo USD</option>
-                  <option>Efectivo Bs</option>
-                  <option>Débito/Crédito Bs</option>
-                  <option>Binance USDT</option>
-                  <option>Zelle USD</option>
-                  <option>Pago Móvil Bs</option>
+                  <option>Tarjeta/Punto</option>
+                  <option>Biopago</option>
+                  <option>Pagomovil</option>
+                  <option>Zelle</option>
+                  <option>Transferencia</option>
                 </select>
               </div>
 
               <div className="flex gap-2">
                 <div className="form-group flex-1">
-                  <label>Monto a Liquidar ({paymentState.method.includes('USD') ? 'USD' : 'Bs'}):</label>
+                  <label>Monto a Liquidar ({(paymentState.method === 'Efectivo USD' || paymentState.method === 'Zelle') ? 'USD' : 'Bs'}):</label>
                   <input 
                     ref={amountRef}
                     type="number" 
