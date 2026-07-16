@@ -104,6 +104,7 @@ export function Modals({
   const handleProductPriceCalc = (field: string, val: number) => {
     let newForm = { ...productForm };
     const cost = newForm.costoPromedio;
+    const tasa = config.tasa;
 
     if (field === 'utilidadPorcentaje') {
       newForm.utilidadPorcentaje = val;
@@ -111,6 +112,10 @@ export function Modals({
     } else if (field === 'precio1') {
       newForm.precio1 = val;
       newForm.utilidadPorcentaje = val > cost ? Math.round((1 - (cost / val)) * 10000) / 100 : 0;
+    } else if (field === 'precioBs') {
+      const priceUsd = val / tasa;
+      newForm.precio1 = Math.round(priceUsd * 100) / 100;
+      newForm.utilidadPorcentaje = newForm.precio1 > cost ? Math.round((1 - (cost / newForm.precio1)) * 10000) / 100 : 0;
     } else if (field === 'costoPromedio') {
       newForm.costoPromedio = val;
       newForm.precio1 = newForm.utilidadPorcentaje >= 100 ? val : Math.round((val / (1 - newForm.utilidadPorcentaje/100)) * 100) / 100;
@@ -369,7 +374,7 @@ export function Modals({
         {activeModal === 'modalProducto' && (
           <div className="modal-window xlarge" onClick={e => e.stopPropagation()}>
             <div className="modal-titlebar">
-              <span>📇 FICHA MAESTRA DE PRODUCTO</span>
+              <span>📇 FICHA MAESTRA DE PRODUCTO / SERVICIO</span>
               <span className="modal-close" onClick={onClose}>✕</span>
             </div>
             <div className="modal-body max-h-[80vh] overflow-y-auto">
@@ -429,9 +434,13 @@ export function Modals({
                   </div>
                   <div className="form-group">
                     <label>Departamento:</label>
-                    <select value={productForm.departamento} onChange={e => setProductForm({...productForm, departamento: e.target.value})} className="win-input">
-                      {departamentos.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
+                    <div className="flex gap-1">
+                      <select value={productForm.departamento} onChange={e => setProductForm({...productForm, departamento: e.target.value})} className="win-input flex-1">
+                        {departamentos.map(d => <option key={d} value={d}>{d}</option>)}
+                      </select>
+                      <button className="btn p-1" onClick={() => manageList(departamentos, setDepartamentos, 'add')}>+</button>
+                      <button className="btn p-1" onClick={() => manageList(departamentos, setDepartamentos, 'remove', productForm.departamento)}>-</button>
+                    </div>
                   </div>
                 </div>
 
@@ -481,8 +490,8 @@ export function Modals({
                     <input 
                       type="number" 
                       value={Math.round(productForm.precio1 * config.tasa * 100) / 100} 
-                      readOnly
-                      className="win-input font-black bg-gray-200"
+                      onChange={e => handleProductPriceCalc('precioBs', parseFloat(e.target.value) || 0)}
+                      className="win-input font-black bg-white"
                     />
                   </div>
                 </div>

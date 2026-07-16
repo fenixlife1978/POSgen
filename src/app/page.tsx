@@ -151,7 +151,7 @@ export default function POSPage() {
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
         <PosModule active={activeModule === 'pos'} onOpenModal={openModal} products={products} clients={clients} cart={posCart} setCart={setPosCart} config={config} notify={notify} selectedRow={selectedRow} setSelectedRow={setSelectedRow} />
         <DashboardModule active={activeModule === 'dashboard'} sales={sales} products={products} config={config} />
-        <ProductsModule active={activeModule === 'productos'} onOpenModal={openModal} products={products} setProducts={setProducts} tasa={config.tasa} notify={notify} />
+        <ProductsModule active={activeModule === 'productos'} onOpenModal={openModal} products={products} tasa={config.tasa} notify={notify} />
         <ClientsModule active={activeModule === 'clientes'} onOpenModal={openModal} clients={clients} setClients={setClients} notify={notify} />
         <SalesModule active={activeModule === 'ventas'} sales={sales} setSales={setSales} products={products} setProducts={setProducts} notify={notify} />
         <InventoryModule active={activeModule === 'inventario'} onOpenModal={openModal} products={products} movements={movements} />
