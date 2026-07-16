@@ -61,6 +61,7 @@ export function Modals({
   const [productForm, setProductForm] = useState<Product>(initialProduct);
   const [stockInicial, setStockInicial] = useState<string>('0');
   
+  const [costoText, setCostoText] = useState<string>('0');
   const [markupText, setMarkupText] = useState<string>('30');
   const [precioUsdText, setPrecioUsdText] = useState<string>('0');
   const [precioBsText, setPrecioBsText] = useState<string>('0');
@@ -100,6 +101,7 @@ export function Modals({
       if (prod) {
         setProductForm({ ...prod });
         setStockInicial(prod.stock.toString());
+        setCostoText(prod.costoPromedio.toString());
         setMarkupText(prod.utilidadPorcentaje.toString());
         setPrecioUsdText(prod.precio1.toString());
         setPrecioBsText((prod.precio1 * config.tasa).toFixed(2));
@@ -108,6 +110,7 @@ export function Modals({
     } else if (activeModal === 'modalProducto') {
       setProductForm(initialProduct);
       setStockInicial('0');
+      setCostoText('0');
       setMarkupText('30');
       setPrecioUsdText('0');
       setPrecioBsText('0');
@@ -191,27 +194,39 @@ export function Modals({
 
   const handleProductPriceCalc = (field: string, valStr: string) => {
     let newForm = { ...productForm };
-    const cost = newForm.costoPromedio;
     const tasa = config.tasa;
     const val = parseFloat(valStr) || 0;
-    if (field === 'utilidadPorcentaje') {
+
+    if (field === 'costo') {
+      setCostoText(valStr);
+      newForm.costoPromedio = val;
+      newForm.costoActual = val;
+      const markup = parseFloat(markupText) || 0;
+      const newPrice = Math.round((val * (1 + markup / 100)) * 100) / 100;
+      newForm.precio1 = newPrice;
+      setPrecioUsdText(newPrice.toString());
+      setPrecioBsText((newPrice * tasa).toFixed(2));
+    } else if (field === 'utilidadPorcentaje') {
       setMarkupText(valStr);
-      const newPrice = val >= 100 ? cost : Math.round((cost / (1 - val/100)) * 100) / 100;
+      const cost = newForm.costoPromedio;
+      const newPrice = Math.round((cost * (1 + val / 100)) * 100) / 100;
       newForm.utilidadPorcentaje = val;
       newForm.precio1 = newPrice;
       setPrecioUsdText(newPrice.toString());
       setPrecioBsText((newPrice * tasa).toFixed(2));
     } else if (field === 'precio1') {
       setPrecioUsdText(valStr);
+      const cost = newForm.costoPromedio;
       newForm.precio1 = val;
-      newForm.utilidadPorcentaje = val > cost ? Math.round((1 - (cost / val)) * 10000) / 100 : 0;
+      newForm.utilidadPorcentaje = cost > 0 ? Math.round(((val / cost) - 1) * 10000) / 100 : 0;
       setMarkupText(newForm.utilidadPorcentaje.toString());
       setPrecioBsText((val * tasa).toFixed(2));
     } else if (field === 'precioBs') {
       setPrecioBsText(valStr);
+      const cost = newForm.costoPromedio;
       const priceUsd = val / tasa;
       newForm.precio1 = Math.round(priceUsd * 100) / 100;
-      newForm.utilidadPorcentaje = newForm.precio1 > cost ? Math.round((1 - (cost / newForm.precio1)) * 10000) / 100 : 0;
+      newForm.utilidadPorcentaje = cost > 0 ? Math.round(((newForm.precio1 / cost) - 1) * 10000) / 100 : 0;
       setPrecioUsdText(newForm.precio1.toString());
       setMarkupText(newForm.utilidadPorcentaje.toString());
     }
@@ -227,6 +242,8 @@ export function Modals({
     const isNew = editingId === null;
     const finalForm = {
       ...productForm,
+      costoPromedio: parseFloat(costoText) || 0,
+      costoActual: parseFloat(costoText) || 0,
       stock: productForm.isService ? 0 : (parseInt(stockInicial) || 0),
       stockMin: productForm.isService ? 0 : (parseInt(stockMinText) || 0),
       utilidadPorcentaje: parseFloat(markupText) || 0,
@@ -893,12 +910,15 @@ export function Modals({
                       {departamentos.map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
                     <button className="btn px-2" onClick={() => {const n=prompt('Nuevo Dept:'); if(n) setDepartamentos([...departamentos, n])}}>+</button>
-                    <button className="btn px-2" onClick={() => setDepartamentos(departamentos.filter(d => d !== productForm.departamento))}>-</button>
                   </div>
                 </div>
               </div>
 
               <div className="settings-section space-y-4">
+                <div className="form-group">
+                  <label>Precio de Costo (USD):</label>
+                  <input type="text" value={costoText} onChange={e => handleProductPriceCalc('costo', e.target.value)} className="win-input font-bold bg-gray-50" />
+                </div>
                 <div className="form-group">
                   <label>Ganancia Markup (%):</label>
                   <input type="text" value={markupText} onChange={e => handleProductPriceCalc('utilidadPorcentaje', e.target.value)} className="win-input text-blue-800 font-bold" />
