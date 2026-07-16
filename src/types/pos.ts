@@ -31,6 +31,7 @@ export interface Product {
   capacidadContenido?: number;
   manejaPeso: boolean;
   isKit: boolean;
+  isService?: boolean;
   stockPropio: boolean;
   kitComponents: KitComponent[];
   stock: number;
