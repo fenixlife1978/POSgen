@@ -109,6 +109,190 @@ body {
   display: flex;
 }
 
+/* DASHBOARD & WIDGETS */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.dash-card {
+  background: #c0c0c0;
+  border: 2px solid;
+  border-color: #fff #808080 #808080 #fff;
+  padding: 10px;
+  text-align: center;
+  box-shadow: 1px 1px 0 #000;
+}
+
+.dash-value {
+  font-size: 22px;
+  font-weight: bold;
+  margin-bottom: 4px;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.dash-label {
+  font-size: 10px;
+  font-weight: bold;
+  color: #333;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* TOOLBARS */
+.toolbar {
+  background: #c0c0c0;
+  border: 2px solid;
+  border-color: #fff #808080 #808080 #fff;
+  padding: 4px;
+  margin-bottom: 8px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.toolbar button {
+  background: #c0c0c0;
+  border: 2px solid;
+  border-color: #fff #808080 #808080 #fff;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.toolbar button:active {
+  border-color: #808080 #fff #fff #808080;
+  padding: 5px 9px 3px 11px;
+}
+
+.toolbar input[type="text"], .toolbar input[type="date"] {
+  border: 2px solid;
+  border-color: #808080 #fff #fff #808080;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
+/* DATA TABLES */
+.table-responsive {
+  flex: 1;
+  overflow: auto;
+  border: 2px solid;
+  border-color: #808080 #fff #fff #808080;
+  background: white;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.data-table thead th {
+  background: #c0c0c0;
+  border: 1px solid #808080;
+  padding: 6px 8px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  text-align: left;
+  box-shadow: inset 1px 1px #fff;
+}
+
+.data-table tbody td {
+  padding: 5px 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.data-table tbody tr:hover {
+  background: #f0f0f0;
+}
+
+.data-table tbody tr.selected {
+  background: #000080;
+  color: white;
+}
+
+/* CONFIG SECTIONS */
+.settings-section {
+  background: #c0c0c0;
+  border: 2px solid;
+  border-color: #808080 #fff #fff #808080;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.settings-section h3 {
+  font-size: 12px;
+  margin-bottom: 10px;
+  color: #000080;
+  border-bottom: 1px solid #808080;
+  padding-bottom: 3px;
+}
+
+/* CHARTS */
+.chart-container {
+  background: white;
+  border: 2px solid;
+  border-color: #808080 #fff #fff #808080;
+  padding: 15px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.bar-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  height: 200px;
+  padding: 10px 20px;
+  border-bottom: 2px solid #808080;
+  margin-top: 20px;
+}
+
+.bar {
+  flex: 1;
+  background: linear-gradient(to right, #000080, #1084d0);
+  position: relative;
+  min-width: 35px;
+  border: 1px solid #fff;
+}
+
+.bar-value {
+  position: absolute;
+  top: -22px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  font-size: 10px;
+  font-weight: bold;
+  color: #000;
+}
+
+.bar-label {
+  position: absolute;
+  bottom: -22px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  font-size: 10px;
+  color: #333;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
 .header-section {
   background: #dce8f0;
   border: 1px solid #808080;
