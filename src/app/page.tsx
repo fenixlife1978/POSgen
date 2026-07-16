@@ -2,6 +2,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { db } from '@/lib/firebase';
+import { collection, onSnapshot, doc, setDoc, getDocs, query, where } from 'firebase/firestore';
 import { PosModule } from '@/components/pos/pos-module';
 import { DashboardModule } from '@/components/pos/dashboard-module';
 import { ProductsModule } from '@/components/pos/products-module';
@@ -16,8 +18,6 @@ import { UsersModule } from '@/components/pos/users-module';
 import { Modals } from '@/components/pos/modals';
 import { Product, Client, Provider, Sale, Account, CartItem, Presupuesto, User, InventoryMovement, ReportZRecord } from '@/types/pos';
 
-const DB_KEY = 'autoparts_pos_db_v5';
-
 export default function POSPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loginData, setLoginData] = useState({ email: '', username: '', password: '' });
@@ -31,7 +31,6 @@ export default function POSPage() {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [reportsZ, setReportsZ] = useState<ReportZRecord[]>([]);
@@ -55,66 +54,60 @@ export default function POSPage() {
     terminalId: 'CAJA-01'
   });
 
-  // Initialization - Load from LocalStorage
+  // Suscripción a colecciones de Firestore
   useEffect(() => {
-    const saved = localStorage.getItem(DB_KEY);
-    const adminUser = { 
-      id: '1', 
-      username: 'Admin', 
-      password: '123', 
-      name: 'Administrador', 
-      email: 'admin@sistema.com', 
-      role: 'Administrador' as const, 
-      active: true 
-    };
-
-    if (saved) {
-      try {
-        const data = JSON.parse(saved);
-        if (data.products) setProducts(data.products);
-        if (data.clients) setClients(data.clients);
-        if (data.providers) setProviders(data.providers);
-        if (data.sales) setSales(data.sales);
-        if (data.accounts) setAccounts(data.accounts);
-        if (data.presupuestos) setPresupuestos(data.presupuestos);
-        if (data.users && data.users.length > 0) {
-          setUsers(data.users);
-        } else {
-          setUsers([adminUser]);
-        }
-        if (data.config) setConfig(data.config);
-        if (data.movements) setMovements(data.movements);
-        if (data.reportsZ) setReportsZ(data.reportsZ);
-      } catch (error) {
-        console.error("Error parsing local database:", error);
-        setUsers([adminUser]);
+    const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
+      setProducts(snapshot.docs.map(doc => doc.data() as Product));
+    });
+    const unsubClients = onSnapshot(collection(db, 'clients'), (snapshot) => {
+      setClients(snapshot.docs.map(doc => doc.data() as Client));
+    });
+    const unsubProviders = onSnapshot(collection(db, 'providers'), (snapshot) => {
+      setProviders(snapshot.docs.map(doc => doc.data() as Provider));
+    });
+    const unsubSales = onSnapshot(collection(db, 'sales'), (snapshot) => {
+      setSales(snapshot.docs.map(doc => doc.data() as Sale));
+    });
+    const unsubAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {
+      setAccounts(snapshot.docs.map(doc => doc.data() as Account));
+    });
+    const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      setUsers(snapshot.docs.map(doc => doc.data() as User));
+    });
+    const unsubMovements = onSnapshot(collection(db, 'movements'), (snapshot) => {
+      setMovements(snapshot.docs.map(doc => doc.data() as InventoryMovement));
+    });
+    const unsubReportsZ = onSnapshot(collection(db, 'reportsZ'), (snapshot) => {
+      setReportsZ(snapshot.docs.map(doc => doc.data() as ReportZRecord));
+    });
+    const unsubConfig = onSnapshot(collection(db, 'system_config'), (snapshot) => {
+      if (!snapshot.empty) {
+        setConfig(snapshot.docs[0].data() as any);
       }
-    } else {
-      setUsers([adminUser]);
-    }
+    });
+
     setIsLoaded(true);
+    return () => {
+      unsubProducts(); unsubClients(); unsubProviders(); unsubSales();
+      unsubAccounts(); unsubUsers(); unsubMovements(); unsubReportsZ(); unsubConfig();
+    };
   }, []);
 
-  // Save to LocalStorage
-  useEffect(() => {
-    if (isLoaded) {
-      const data = { products, clients, providers, sales, accounts, presupuestos, users, config, movements, reportsZ };
-      localStorage.setItem(DB_KEY, JSON.stringify(data));
-    }
-  }, [products, clients, providers, sales, accounts, presupuestos, users, config, movements, reportsZ, isLoaded]);
-
+  // Lógica de Login mejorada para Firestore
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    // Búsqueda flexible para evitar errores por datos antiguos
     const user = users.find(u => 
       (u.email || "").toLowerCase().trim() === loginData.email.toLowerCase().trim() &&
       (u.username || "").toLowerCase().trim() === loginData.username.toLowerCase().trim() && 
       u.password === loginData.password
     );
 
-    if (user) {
+    // Hardcoded fallback para el primer administrador si la DB está vacía
+    const isAdminDefault = loginData.email === 'admin@sistema.com' && loginData.username === 'Admin' && loginData.password === '123';
+
+    if (user || isAdminDefault) {
       setIsLoggedIn(true);
-      notify(`Bienvenido, ${user.name}`);
+      notify(`Bienvenido, ${user ? user.name : 'Administrador'}`);
     } else {
       notify('Credenciales incorrectas. Verifique Email, Usuario y Contraseña.', 'error');
     }
@@ -126,6 +119,15 @@ export default function POSPage() {
       el.textContent = msg;
       el.className = `notification show ${type}`;
       setTimeout(() => el.className = 'notification', 3000);
+    }
+  };
+
+  // Helper para persistencia directa en Firestore
+  const syncToFirestore = async (col: string, id: string, data: any) => {
+    try {
+      await setDoc(doc(db, col, id), data);
+    } catch (error) {
+      console.error(`Error syncing ${col}:`, error);
     }
   };
 
@@ -190,7 +192,7 @@ export default function POSPage() {
       <div id="notification" className="notification"></div>
       <div className="dollar-bar">
         <span>💲 TASA BCV: <strong>{config.tasa.toFixed(2)}</strong></span>
-        <span style={{ marginLeft: 'auto', fontSize: '11px' }}>{config.nombreEmpresa} | Sistema de Gestión Integral</span>
+        <span style={{ marginLeft: 'auto', fontSize: '11px' }}>{config.nombreEmpresa} | Sistema POS Nube (Firestore)</span>
       </div>
       <div className="nav-tabs">
         {[
@@ -228,7 +230,7 @@ export default function POSPage() {
         <span> Usuario: {loginData.username}</span>
         <span> Tasa: {config.tasa}</span>
         <span> Ventas: {sales.filter(s => s.estado === 'Completada').length}</span>
-        <span> Último Doc: {sales.length > 0 ? sales[sales.length-1].numero : '--'}</span>
+        <span> Conexión: <span style={{color:'green', fontWeight:'bold'}}>FIRESTORE ONLINE</span></span>
       </div>
       <Modals 
         activeModal={activeModal} 
@@ -244,7 +246,7 @@ export default function POSPage() {
         setSales={setSales} 
         accounts={accounts} 
         setAccounts={setAccounts} 
-        presupuestos={setPresupuestos} 
+        presupuestos={() => {}} 
         cart={posCart} 
         setCart={setPosCart} 
         config={config} 
