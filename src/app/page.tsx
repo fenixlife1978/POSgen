@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, setDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, collectionGroup, query, orderBy, limit } from 'firebase/firestore';
 import { PosModule } from '@/components/pos/pos-module';
 import { DashboardModule } from '@/components/pos/dashboard-module';
 import { ProductsModule } from '@/components/pos/products-module';
@@ -16,7 +16,7 @@ import { ConfigModule } from '@/components/pos/config-module';
 import { AccountsModule } from '@/components/pos/accounts-module';
 import { UsersModule } from '@/components/pos/users-module';
 import { Modals } from '@/components/pos/modals';
-import { Product, Client, Provider, Sale, Account, CartItem, Presupuesto, User, InventoryMovement, ReportZRecord } from '@/types/pos';
+import { Product, Client, Provider, Sale, Account, CartItem, User, InventoryMovement, ReportZRecord } from '@/types/pos';
 
 export default function POSPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -54,8 +54,9 @@ export default function POSPage() {
     terminalId: 'CAJA-01'
   });
 
-  // Suscripción a colecciones de Firestore
+  // Suscripción optimizada a Firestore
   useEffect(() => {
+    // Colecciones Principales
     const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
       setProducts(snapshot.docs.map(doc => doc.data() as Product));
     });
@@ -65,7 +66,7 @@ export default function POSPage() {
     const unsubProviders = onSnapshot(collection(db, 'providers'), (snapshot) => {
       setProviders(snapshot.docs.map(doc => doc.data() as Provider));
     });
-    const unsubSales = onSnapshot(collection(db, 'sales'), (snapshot) => {
+    const unsubSales = onSnapshot(query(collection(db, 'sales'), orderBy('fecha', 'desc'), limit(100)), (snapshot) => {
       setSales(snapshot.docs.map(doc => doc.data() as Sale));
     });
     const unsubAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {
@@ -74,16 +75,20 @@ export default function POSPage() {
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       setUsers(snapshot.docs.map(doc => doc.data() as User));
     });
-    const unsubMovements = onSnapshot(collection(db, 'movements'), (snapshot) => {
-      setMovements(snapshot.docs.map(doc => doc.data() as InventoryMovement));
+
+    // Auditoría y Configuración (Optimizado en sub-rutas)
+    const unsubConfig = onSnapshot(doc(db, 'system', 'config'), (snapshot) => {
+      if (snapshot.exists()) {
+        setConfig(snapshot.data() as any);
+      }
     });
-    const unsubReportsZ = onSnapshot(collection(db, 'reportsZ'), (snapshot) => {
+    const unsubReportsZ = onSnapshot(collection(db, 'accounting/audit/reportsZ'), (snapshot) => {
       setReportsZ(snapshot.docs.map(doc => doc.data() as ReportZRecord));
     });
-    const unsubConfig = onSnapshot(collection(db, 'system_config'), (snapshot) => {
-      if (!snapshot.empty) {
-        setConfig(snapshot.docs[0].data() as any);
-      }
+
+    // Movimientos Globales (Ajustes) - Usando Collection Group para ver todos los logs de todos los productos
+    const unsubMovements = onSnapshot(query(collectionGroup(db, 'logs'), orderBy('fecha', 'desc'), limit(200)), (snapshot) => {
+      setMovements(snapshot.docs.map(doc => doc.data() as InventoryMovement));
     });
 
     setIsLoaded(true);
@@ -93,7 +98,6 @@ export default function POSPage() {
     };
   }, []);
 
-  // Lógica de Login mejorada para Firestore
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     const user = users.find(u => 
@@ -102,7 +106,6 @@ export default function POSPage() {
       u.password === loginData.password
     );
 
-    // Hardcoded fallback para el primer administrador si la DB está vacía
     const isAdminDefault = loginData.email === 'admin@sistema.com' && loginData.username === 'Admin' && loginData.password === '123';
 
     if (user || isAdminDefault) {
@@ -119,15 +122,6 @@ export default function POSPage() {
       el.textContent = msg;
       el.className = `notification show ${type}`;
       setTimeout(() => el.className = 'notification', 3000);
-    }
-  };
-
-  // Helper para persistencia directa en Firestore
-  const syncToFirestore = async (col: string, id: string, data: any) => {
-    try {
-      await setDoc(doc(db, col, id), data);
-    } catch (error) {
-      console.error(`Error syncing ${col}:`, error);
     }
   };
 
@@ -192,7 +186,7 @@ export default function POSPage() {
       <div id="notification" className="notification"></div>
       <div className="dollar-bar">
         <span>💲 TASA BCV: <strong>{config.tasa.toFixed(2)}</strong></span>
-        <span style={{ marginLeft: 'auto', fontSize: '11px' }}>{config.nombreEmpresa} | Sistema POS Nube (Firestore)</span>
+        <span style={{ marginLeft: 'auto', fontSize: '11px' }}>{config.nombreEmpresa} | Sistema POS Nube (Firestore Optimizado)</span>
       </div>
       <div className="nav-tabs">
         {[
@@ -229,8 +223,8 @@ export default function POSPage() {
       <div className="status-bar">
         <span> Usuario: {loginData.username}</span>
         <span> Tasa: {config.tasa}</span>
-        <span> Ventas: {sales.filter(s => s.estado === 'Completada').length}</span>
-        <span> Conexión: <span style={{color:'green', fontWeight:'bold'}}>FIRESTORE ONLINE</span></span>
+        <span> Ventas Hoy: {sales.filter(s => new Date(s.fecha).toDateString() === new Date().toDateString() && s.estado === 'Completada').length}</span>
+        <span> Conexión: <span style={{color:'green', fontWeight:'bold'}}>CLOUD SYNC OK</span></span>
       </div>
       <Modals 
         activeModal={activeModal} 
