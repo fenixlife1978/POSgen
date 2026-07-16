@@ -1,9 +1,10 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Product, Client, Sale, Account, CartItem, Presupuesto, User, InventoryMovement } from '@/types/pos';
+import { Product, Client, Sale, Account, CartItem, Presupuesto, User, InventoryMovement, KitComponent } from '@/types/pos';
 import { v4 as uuidv4 } from 'uuid';
-import { Wallet, Printer, Download, Plus, Search, Trash2, Save, CreditCard } from 'lucide-react';
+import { Wallet, Printer, Download, Plus, Search, Trash2, Save, CreditCard, Minus } from 'lucide-react';
 
 interface ModalsProps {
   activeModal: string | null;
@@ -54,6 +55,11 @@ export function Modals({
     kitComponents: [], iva: 16
   };
   const [productForm, setProductForm] = useState<Product>(initialProduct);
+  const [stockInicial, setStockInicial] = useState(0);
+
+  // Component selection for virtual kits
+  const [compSearch, setCompSearch] = useState('');
+  const [compResults, setCompResults] = useState<Product[]>([]);
 
   // --- COMPRA FORM STATE ---
   const [purchaseForm, setPurchaseForm] = useState({
@@ -74,9 +80,13 @@ export function Modals({
   useEffect(() => {
     if (activeModal === 'modalProducto' && editingId !== null) {
       const prod = products[editingId];
-      if (prod) setProductForm({ ...prod });
+      if (prod) {
+        setProductForm({ ...prod });
+        setStockInicial(prod.stock);
+      }
     } else if (activeModal === 'modalProducto') {
       setProductForm(initialProduct);
+      setStockInicial(0);
     }
     
     if (activeModal === 'modalProcesar') {
@@ -90,15 +100,43 @@ export function Modals({
 
     if (field === 'utilidadPorcentaje') {
       newForm.utilidadPorcentaje = val;
-      newForm.precio1 = Math.round((cost / (1 - val/100)) * 100) / 100;
+      newForm.precio1 = val >= 100 ? cost : Math.round((cost / (1 - val/100)) * 100) / 100;
     } else if (field === 'precio1') {
       newForm.precio1 = val;
-      newForm.utilidadPorcentaje = val > 0 ? Math.round((1 - (cost / val)) * 10000) / 100 : 0;
+      newForm.utilidadPorcentaje = val > cost ? Math.round((1 - (cost / val)) * 10000) / 100 : 0;
     } else if (field === 'costoPromedio') {
       newForm.costoPromedio = val;
-      newForm.precio1 = Math.round((val / (1 - newForm.utilidadPorcentaje/100)) * 100) / 100;
+      newForm.precio1 = newForm.utilidadPorcentaje >= 100 ? val : Math.round((val / (1 - newForm.utilidadPorcentaje/100)) * 100) / 100;
     }
     setProductForm(newForm);
+  };
+
+  const manageList = (list: string[], setList: (l: string[]) => void, action: 'add' | 'remove', value?: string) => {
+    if (action === 'add') {
+      const newVal = prompt('Ingrese el nuevo valor:');
+      if (newVal) setList([...list, newVal]);
+    } else {
+      if (confirm(`¿Eliminar "${value}" de la lista?`)) {
+        setList(list.filter(l => l !== value));
+      }
+    }
+  };
+
+  const addComponentToKit = (p: Product) => {
+    if (p.codigo === productForm.codigo) {
+      notify('❌ No puedes agregar el producto a sí mismo', 'error');
+      return;
+    }
+    const idx = products.findIndex(item => item.codigo === p.codigo);
+    const exists = productForm.kitComponents.find(c => c.codigo === p.codigo);
+    if (exists) return;
+
+    setProductForm({
+      ...productForm,
+      kitComponents: [...productForm.kitComponents, { productIndex: idx, codigo: p.codigo, cantidad: 1 }]
+    });
+    setCompSearch('');
+    setCompResults([]);
   };
 
   const getCartTotal = () => {
@@ -134,10 +172,20 @@ export function Modals({
       estado: 'Completada'
     };
 
-    const updatedProducts = products.map(p => {
-      const item = cart.find(it => it.codigo === p.codigo);
-      if (item) return { ...p, stock: p.stock - item.cantidad };
-      return p;
+    // LOGICA DE DESCUENTO DE STOCK (INCLUYENDO KITS VIRTUALES)
+    const updatedProducts = [...products];
+    cart.forEach(item => {
+      const product = updatedProducts[item.productIndex];
+      if (product.isKit && !product.stockPropio) {
+        // Kit Virtual: Descontar componentes
+        product.kitComponents.forEach(comp => {
+          const compProd = updatedProducts[comp.productIndex];
+          if (compProd) compProd.stock -= (comp.cantidad * item.cantidad);
+        });
+      } else {
+        // Producto Normal o Kit con Stock Propio
+        product.stock -= item.cantidad;
+      }
     });
 
     setSales([...sales, sale]);
@@ -148,20 +196,52 @@ export function Modals({
     onClose();
   };
 
+  const handleSaveProduct = () => {
+    const updated = [...products];
+    const isNew = editingId === null;
+    const finalProduct = { ...productForm, stock: isNew ? stockInicial : productForm.stock };
+
+    if (isNew) {
+      updated.push(finalProduct);
+      // Registrar movimiento inicial en Kardex
+      if (stockInicial > 0) {
+        const movement: InventoryMovement = {
+          id: uuidv4(),
+          fecha: new Date().toISOString(),
+          codigoProducto: finalProduct.codigo,
+          tipo: 'ENTRADA',
+          cantidad: stockInicial,
+          stockPrevio: 0,
+          stockNuevo: stockInicial,
+          costo: finalProduct.costoPromedio,
+          referencia: 'APERTURA',
+          comentario: 'Stock inicial en ficha maestra',
+          usuario: config.vendedor
+        };
+        setMovements([...movements, movement]);
+      }
+    } else {
+      updated[editingId] = finalProduct;
+    }
+
+    setProducts(updated);
+    notify(`✅ Producto ${isNew ? 'creado' : 'actualizado'} correctamente`);
+    onClose();
+  };
+
   if (!activeModal && !lastSale) return null;
 
   return (
     <>
       <div className={`modal-overlay ${activeModal || lastSale ? 'active' : ''}`} onClick={() => { if(!lastSale) onClose(); else setLastSale(null); }}>
         
-        {/* MODAL FICHA MAESTRA PRODUCTO */}
         {activeModal === 'modalProducto' && (
           <div className="modal-window xlarge" onClick={e => e.stopPropagation()}>
             <div className="modal-titlebar">
               <span>📇 FICHA MAESTRA DE PRODUCTO</span>
               <span className="modal-close" onClick={onClose}>✕</span>
             </div>
-            <div className="modal-body">
+            <div className="modal-body max-h-[80vh] overflow-y-auto">
               <div className="grid grid-cols-3 gap-6">
                 
                 {/* Panel Identificación */}
@@ -193,29 +273,41 @@ export function Modals({
                   <h3 className="text-blue-800 font-bold border-b border-gray-400 pb-1 mb-2">ATRIBUTOS</h3>
                   <div className="form-group">
                     <label>Marca:</label>
-                    <select value={productForm.marca} onChange={e => setProductForm({...productForm, marca: e.target.value})} className="win-input">
-                      {marcas.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
+                    <div className="flex gap-1">
+                      <select value={productForm.marca} onChange={e => setProductForm({...productForm, marca: e.target.value})} className="win-input flex-1">
+                        {marcas.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                      <button className="btn p-1" onClick={() => manageList(marcas, setMarcas, 'add')}>+</button>
+                      <button className="btn p-1" onClick={() => manageList(marcas, setMarcas, 'remove', productForm.marca)}>-</button>
+                    </div>
                   </div>
                   <div className="form-group">
                     <label>Unidad de Medida:</label>
-                    <select value={productForm.unidad} onChange={e => setProductForm({...productForm, unidad: e.target.value})} className="win-input">
-                      {unidades.map(u => <option key={u} value={u}>{u}</option>)}
-                    </select>
+                    <div className="flex gap-1">
+                      <select value={productForm.unidad} onChange={e => setProductForm({...productForm, unidad: e.target.value})} className="win-input flex-1">
+                        {unidades.map(u => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                      <button className="btn p-1" onClick={() => manageList(unidades, setUnidades, 'add')}>+</button>
+                    </div>
                   </div>
                   <div className="form-group">
                     <label>Categoría:</label>
-                    <select value={productForm.categoria} onChange={e => setProductForm({...productForm, categoria: e.target.value})} className="win-input">
-                      {categorias.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
+                    <div className="flex gap-1">
+                      <select value={productForm.categoria} onChange={e => setProductForm({...productForm, categoria: e.target.value})} className="win-input flex-1">
+                        {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <button className="btn p-1" onClick={() => manageList(categorias, setCategorias, 'add')}>+</button>
+                    </div>
                   </div>
                   <div className="form-group">
-                    <label>Ubicación Física:</label>
-                    <input type="text" value={productForm.ubicacion} onChange={e => setProductForm({...productForm, ubicacion: e.target.value})} className="win-input" placeholder="Pasillo / Estante" />
+                    <label>Departamento:</label>
+                    <select value={productForm.departamento} onChange={e => setProductForm({...productForm, departamento: e.target.value})} className="win-input">
+                      {departamentos.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
                   </div>
                 </div>
 
-                {/* Panel Precios y Lógica Financial */}
+                {/* Panel Precios */}
                 <div className="win-window p-4 space-y-3 bg-gray-100">
                   <h3 className="text-green-800 font-bold border-b border-gray-400 pb-1 mb-2">LOGICA FINANCIERA</h3>
                   <div className="form-group">
@@ -249,7 +341,7 @@ export function Modals({
                     <label>Precio Detal (Bs.):</label>
                     <input 
                       type="number" 
-                      value={(productForm.precio1 * config.tasa)} 
+                      value={Math.round(productForm.precio1 * config.tasa * 100) / 100} 
                       readOnly
                       className="win-input font-black bg-gray-200"
                     />
@@ -259,39 +351,110 @@ export function Modals({
 
               {/* Secciones Adicionales */}
               <div className="grid grid-cols-2 gap-6 mt-6">
-                <div className="win-window p-4">
+                <div className="win-window p-4 space-y-4">
                   <h3 className="text-indigo-800 font-bold mb-2">STOCK Y TIPO</h3>
                   <div className="flex gap-4">
                     <div className="form-group flex-1">
                       <label>Stock Mínimo:</label>
                       <input type="number" value={productForm.stockMin} onChange={e => setProductForm({...productForm, stockMin: parseInt(e.target.value) || 0})} className="win-input" />
                     </div>
-                    <div className="form-group flex-1">
-                      <label>Alicuota IVA (%):</label>
-                      <select value={productForm.ivaAlicuota} onChange={e => setProductForm({...productForm, ivaAlicuota: parseInt(e.target.value)})}>
-                        <option value={16}>16% (General)</option>
-                        <option value={8}>8% (Reducida)</option>
-                        <option value={0}>0% (Exento)</option>
-                      </select>
-                    </div>
+                    {editingId === null && (
+                      <div className="form-group flex-1">
+                        <label>Stock Inicial:</label>
+                        <input type="number" value={stockInicial} onChange={e => setStockInicial(parseInt(e.target.value) || 0)} className="win-input bg-yellow-50" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="form-group">
+                    <label>Ubicación Física:</label>
+                    <input type="text" value={productForm.ubicacion} onChange={e => setProductForm({...productForm, ubicacion: e.target.value})} className="win-input" />
                   </div>
                 </div>
-                <div className="win-window p-4 flex items-center justify-around">
-                  <label className="flex items-center gap-2 font-bold"><input type="checkbox" checked={productForm.isKit} onChange={e => setProductForm({...productForm, isKit: e.target.checked})} /> Es Kit / Combo</label>
-                  <label className="flex items-center gap-2 font-bold"><input type="checkbox" checked={productForm.stockPropio} onChange={e => setProductForm({...productForm, stockPropio: e.target.checked})} /> Stock Propio</label>
+
+                <div className="win-window p-4 space-y-4">
+                   <div className="flex items-center justify-around h-full">
+                      <label className="flex items-center gap-2 font-bold cursor-pointer">
+                        <input type="checkbox" checked={productForm.isKit} onChange={e => setProductForm({...productForm, isKit: e.target.checked})} /> 
+                        Es Kit / Combo
+                      </label>
+                      {productForm.isKit && (
+                        <div className="flex flex-col gap-2">
+                           <label className="flex items-center gap-2 text-xs cursor-pointer">
+                            <input type="radio" name="kitType" checked={productForm.stockPropio} onChange={() => setProductForm({...productForm, stockPropio: true})} /> 
+                            Stock Propio
+                          </label>
+                          <label className="flex items-center gap-2 text-xs cursor-pointer">
+                            <input type="radio" name="kitType" checked={!productForm.stockPropio} onChange={() => setProductForm({...productForm, stockPropio: false})} /> 
+                            Stock Virtual
+                          </label>
+                        </div>
+                      )}
+                   </div>
                 </div>
               </div>
+
+              {/* SECCION COMPONENTES KIT VIRTUAL */}
+              {productForm.isKit && !productForm.stockPropio && (
+                <div className="win-window p-4 mt-6 animate-in slide-in-from-top-4">
+                  <h3 className="text-blue-800 font-bold mb-4 border-b">COMPONENTES DEL KIT VIRTUAL (Se descuentan del inventario)</h3>
+                  <div className="flex gap-2 mb-4 relative">
+                    <input 
+                      type="text" 
+                      placeholder="🔍 Buscar componente..." 
+                      className="win-input flex-1"
+                      value={compSearch}
+                      onChange={e => {
+                        setCompSearch(e.target.value);
+                        if (e.target.value.length > 1) {
+                          setCompResults(products.filter(p => p.nombre.toLowerCase().includes(e.target.value.toLowerCase()) || p.codigo.toLowerCase().includes(e.target.value.toLowerCase())).slice(0, 5));
+                        } else setCompResults([]);
+                      }}
+                    />
+                    {compResults.length > 0 && (
+                      <div className="absolute top-full left-0 w-full bg-white border-2 border-blue-800 z-50 shadow-xl">
+                        {compResults.map(p => (
+                          <div key={p.codigo} className="p-2 hover:bg-blue-100 cursor-pointer text-xs flex justify-between" onClick={() => addComponentToKit(p)}>
+                            <span>{p.codigo} - {p.nombre}</span>
+                            <span className="font-bold">Stock: {p.stock}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <table className="data-table">
+                    <thead>
+                      <tr><th>Código</th><th>Descripción</th><th className="w-24">Cantidad</th><th>Eliminar</th></tr>
+                    </thead>
+                    <tbody>
+                      {productForm.kitComponents.map((comp, idx) => (
+                        <tr key={comp.codigo}>
+                          <td>{comp.codigo}</td>
+                          <td>{products.find(p => p.codigo === comp.codigo)?.nombre}</td>
+                          <td>
+                            <input 
+                              type="number" 
+                              value={comp.cantidad} 
+                              onChange={e => {
+                                const n = [...productForm.kitComponents];
+                                n[idx].cantidad = parseInt(e.target.value) || 1;
+                                setProductForm({...productForm, kitComponents: n});
+                              }}
+                              className="win-input w-full text-center"
+                            />
+                          </td>
+                          <td className="text-center">
+                            <button className="text-red-600" onClick={() => setProductForm({...productForm, kitComponents: productForm.kitComponents.filter((_, i) => i !== idx)})}>❌</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
             <div className="modal-footer">
               <button className="btn" onClick={onClose}>Cancelar</button>
-              <button className="btn btn-primary" onClick={() => {
-                const updated = [...products];
-                if (editingId !== null) updated[editingId] = productForm;
-                else updated.push(productForm);
-                setProducts(updated);
-                notify('✅ Producto guardado correctamente');
-                onClose();
-              }}>💾 GUARDAR FICHA</button>
+              <button className="btn btn-primary" onClick={handleSaveProduct}>💾 GUARDAR FICHA</button>
             </div>
           </div>
         )}
@@ -335,11 +498,11 @@ export function Modals({
                   <>
                     <div className="form-group">
                       <label>Pago Contado (USD):</label>
-                      <input type="number" value={purchaseForm.pagoContadoUsd} onChange={e => setPurchaseForm({...purchaseForm, pagoContadoUsd: parseFloat(e.target.value) || 0, pagoContadoBs: (parseFloat(e.target.value) || 0) * purchaseForm.tasa})} className="win-input" />
+                      <input type="number" value={purchaseForm.pagoContadoUsd} onChange={e => setPurchaseForm({...purchaseForm, pagoContadoUsd: parseFloat(e.target.value) || 0, pagoContadoBs: Math.round((parseFloat(e.target.value) || 0) * purchaseForm.tasa * 100) / 100})} className="win-input" />
                     </div>
                     <div className="form-group">
                       <label>Pago Contado (Bs.):</label>
-                      <input type="number" value={purchaseForm.pagoContadoBs} onChange={e => setPurchaseForm({...purchaseForm, pagoContadoBs: parseFloat(e.target.value) || 0, pagoContadoUsd: (parseFloat(e.target.value) || 0) / purchaseForm.tasa})} className="win-input" />
+                      <input type="number" value={purchaseForm.pagoContadoBs} onChange={e => setPurchaseForm({...purchaseForm, pagoContadoBs: parseFloat(e.target.value) || 0, pagoContadoUsd: Math.round(((parseFloat(e.target.value) || 0) / purchaseForm.tasa) * 100) / 100})} className="win-input" />
                     </div>
                   </>
                 )}
@@ -359,7 +522,20 @@ export function Modals({
                     <tr><th>Código</th><th>Descripción</th><th>Cant</th><th>Costo USD</th><th>Subtotal</th><th>Acción</th></tr>
                   </thead>
                   <tbody>
-                    <tr><td colSpan={6} className="text-center py-8 text-gray-400 italic">No hay items cargados en esta compra</td></tr>
+                    {purchaseForm.items.length === 0 ? (
+                      <tr><td colSpan={6} className="text-center py-8 text-gray-400 italic">No hay items cargados en esta compra</td></tr>
+                    ) : (
+                      purchaseForm.items.map((it, idx) => (
+                        <tr key={idx}>
+                          <td>{it.codigo}</td>
+                          <td>{it.nombre}</td>
+                          <td>{it.cantidad}</td>
+                          <td>${it.costo.toFixed(2)}</td>
+                          <td>${(it.cantidad * it.costo).toFixed(2)}</td>
+                          <td className="text-center">❌</td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
