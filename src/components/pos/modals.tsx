@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -61,7 +62,6 @@ export function Modals({
   const [productForm, setProductForm] = useState<Product>(initialProduct);
   const [stockInicial, setStockInicial] = useState<string>('0');
   
-  // States for text-based numeric inputs to allow free typing
   const [markupText, setMarkupText] = useState<string>('30');
   const [precioUsdText, setPrecioUsdText] = useState<string>('0');
   const [precioBsText, setPrecioBsText] = useState<string>('0');
@@ -127,6 +127,30 @@ export function Modals({
     }
   }, [activeModal, editingId, products, clients, providers, config.tasa]);
 
+  const handleSaveProvider = () => {
+    if (!providerForm.rif || !providerForm.nombre) {
+      notify('❌ RIF y Nombre son obligatorios', 'error');
+      return;
+    }
+    
+    let updatedProviders = [...providers];
+    const isNew = editingId === null;
+    
+    if (isNew) {
+      if (providers.some(p => p.rif === providerForm.rif)) {
+        notify('❌ Este RIF ya está registrado', 'error');
+        return;
+      }
+      updatedProviders.push({ ...providerForm, id: uuidv4() });
+    } else {
+      updatedProviders = providers.map(p => p.id === editingId ? { ...providerForm } : p);
+    }
+
+    setProviders(updatedProviders);
+    notify(`✅ Proveedor ${isNew ? 'registrado' : 'actualizado'} correctamente`);
+    onClose();
+  };
+
   const handleSaveClient = () => {
     if (!clientForm.rifNum || !clientForm.nombre) {
       notify('❌ Cédula/RIF y Nombre son obligatorios', 'error');
@@ -187,7 +211,6 @@ export function Modals({
     let updatedProducts = [...products];
     const isNew = editingId === null;
     
-    // Final numeric sync
     const finalForm = {
       ...productForm,
       stock: parseInt(stockInicial) || 0,
@@ -328,6 +351,82 @@ export function Modals({
   return (
     <div className={`modal-overlay ${activeModal || lastSale ? 'active' : ''}`} onClick={() => { if(!lastSale) onClose(); else setLastSale(null); }}>
       
+      {activeModal === 'modalProveedor' && (
+        <div className="modal-window large" onClick={e => e.stopPropagation()}>
+          <div className="modal-titlebar">
+            <span>🏢 REGISTRO MAESTRO DE PROVEEDOR</span>
+            <span className="modal-close" onClick={onClose}>✕</span>
+          </div>
+          <div className="modal-body">
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="settings-section">
+                  <h3>Identificación Fiscal</h3>
+                  <div className="form-group">
+                    <label>Rif / C.I. (V-):</label>
+                    <input 
+                      type="text" 
+                      value={providerForm.rif} 
+                      onChange={e => setProviderForm({...providerForm, rif: e.target.value.toUpperCase()})} 
+                      placeholder="Ej: J-12345678-0"
+                      className="win-input font-bold" 
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Nombre de la Empresa:</label>
+                    <input 
+                      type="text" 
+                      value={providerForm.nombre} 
+                      onChange={e => setProviderForm({...providerForm, nombre: e.target.value})} 
+                      className="win-input" 
+                    />
+                  </div>
+                </div>
+                <div className="settings-section">
+                  <h3>Ubicación</h3>
+                  <div className="form-group">
+                    <label>Dirección:</label>
+                    <textarea 
+                      value={providerForm.direccion} 
+                      onChange={e => setProviderForm({...providerForm, direccion: e.target.value})} 
+                      className="win-input" 
+                      style={{ height: '80px' }} 
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="settings-section">
+                  <h3>Contacto Directo</h3>
+                  <div className="form-group">
+                    <label>Persona de Contacto:</label>
+                    <input 
+                      type="text" 
+                      value={providerForm.contacto} 
+                      onChange={e => setProviderForm({...providerForm, contacto: e.target.value})} 
+                      className="win-input" 
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Teléfono:</label>
+                    <input 
+                      type="text" 
+                      value={providerForm.telefono} 
+                      onChange={e => setProviderForm({...providerForm, telefono: e.target.value})} 
+                      className="win-input" 
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button className="btn" onClick={onClose}>Cancelar</button>
+            <button className="btn btn-primary" onClick={handleSaveProvider}>💾 GUARDAR PROVEEDOR</button>
+          </div>
+        </div>
+      )}
+
       {activeModal === 'modalCliente' && (
         <div className="modal-window large" onClick={e => e.stopPropagation()}>
           <div className="modal-titlebar">
@@ -475,7 +574,6 @@ export function Modals({
           </div>
           <div className="modal-body">
             <div className="grid grid-cols-3 gap-4">
-              {/* Column 1: Identificación */}
               <div className="settings-section space-y-4">
                 <div className="form-group">
                   <label>Código:</label>
@@ -498,7 +596,6 @@ export function Modals({
                 </div>
               </div>
 
-              {/* Column 2: Atributos */}
               <div className="settings-section space-y-4">
                 <div className="form-group">
                   <label>Marca:</label>
@@ -542,7 +639,6 @@ export function Modals({
                 </div>
               </div>
 
-              {/* Column 3: Lógica Financiera */}
               <div className="settings-section space-y-4">
                 <div className="form-group">
                   <label>Ganancia Markup (%):</label>
@@ -599,7 +695,6 @@ export function Modals({
                     </label>
                     {!productForm.stockPropio && (
                       <div className="mt-1 max-h-20 overflow-y-auto text-[9px]">
-                        {/* Component selection logic same as before */}
                         <select className="w-full win-input" onChange={e => {
                           const idx = parseInt(e.target.value);
                           if(!isNaN(idx)){
