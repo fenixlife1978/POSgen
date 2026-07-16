@@ -20,7 +20,7 @@ const DB_KEY = 'autoparts_pos_db_v2';
 
 export default function POSPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [loginData, setLoginData] = useState({ username: '', password: '' });
+  const [loginData, setLoginData] = useState({ email: '', username: '', password: '' });
   const [activeModule, setActiveModule] = useState('pos');
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -72,7 +72,7 @@ export default function POSPage() {
     } else {
       // Default users if first time
       setUsers([
-        { id: '1', username: 'Admin', password: '123', name: 'Administrador', role: 'Administrador', active: true }
+        { id: '1', username: 'Admin', password: '123', name: 'Administrador', email: 'admin@sistema.com', role: 'Administrador', active: true }
       ]);
     }
     setIsLoaded(true);
@@ -88,12 +88,16 @@ export default function POSPage() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    const user = users.find(u => u.username.toLowerCase() === loginData.username.toLowerCase() && u.password === loginData.password);
+    const user = users.find(u => 
+      u.username.toLowerCase() === loginData.username.toLowerCase() && 
+      u.email.toLowerCase() === loginData.email.toLowerCase() &&
+      u.password === loginData.password
+    );
     if (user) {
       setIsLoggedIn(true);
       notify(`Bienvenido, ${user.name}`);
     } else {
-      notify('Usuario o contraseña incorrectos', 'error');
+      notify('Credenciales incorrectas. Verifique Email, Usuario y Contraseña.', 'error');
     }
   };
 
@@ -122,8 +126,12 @@ export default function POSPage() {
           <div className="login-title">Acceso al Sistema - POS Pro</div>
           <form onSubmit={handleLogin}>
             <div className="form-group">
+              <label>Email:</label>
+              <input type="email" required value={loginData.email} onChange={e => setLoginData({...loginData, email: e.target.value})} autoFocus />
+            </div>
+            <div className="form-group">
               <label>Usuario:</label>
-              <input type="text" required value={loginData.username} onChange={e => setLoginData({...loginData, username: e.target.value})} autoFocus />
+              <input type="text" required value={loginData.username} onChange={e => setLoginData({...loginData, username: e.target.value})} />
             </div>
             <div className="form-group">
               <label>Contraseña:</label>
