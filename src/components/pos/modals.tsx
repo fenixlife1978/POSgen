@@ -740,7 +740,7 @@ export function Modals({
               <span className="modal-close" onClick={onClose}>✕</span>
             </div>
             <div className="modal-body space-y-4">
-              <div className="win-window p-4 bg-gray-200 text-black text-center space-y-2 border-none">
+              <div className="win-window p-4 bg-gray-200 text-black text-center space-y-2 border-none shadow-inner">
                 <div className="text-sm font-bold opacity-70">TOTAL A CANCELAR</div>
                 <div className="text-4xl font-black">${getCartTotal().toFixed(2)}</div>
                 <div className="text-sm opacity-80">Equiv. Bs. {(getCartTotal() * config.tasa).toFixed(2)}</div>
@@ -765,7 +765,7 @@ export function Modals({
                 </select>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-end">
                 <div className="form-group flex-1">
                   <label>Monto a Liquidar ({(paymentState.method === 'Efectivo USD' || paymentState.method === 'Zelle') ? 'USD' : 'Bs'}):</label>
                   <input 
@@ -778,12 +778,27 @@ export function Modals({
                   />
                 </div>
                 <button 
+                  className="btn h-10 bg-blue-100 text-[10px] font-black uppercase px-2 hover:bg-blue-200 shadow-sm border border-blue-300"
+                  onClick={() => {
+                    const total = getCartTotal();
+                    const missingUsd = Math.max(0, total - paymentState.totalPaidUsd);
+                    const isUsdMethod = paymentState.method === 'Efectivo USD' || paymentState.method === 'Zelle';
+                    if (isUsdMethod) {
+                      setPaymentState({...paymentState, amount: Math.round(missingUsd * 100) / 100});
+                    } else {
+                      setPaymentState({...paymentState, amount: Math.round(missingUsd * config.tasa * 100) / 100});
+                    }
+                  }}
+                >
+                  Pago Exacto
+                </button>
+                <button 
                   ref={addBtnRef}
-                  className="btn btn-primary mt-6 px-4" 
+                  className="btn btn-primary h-10 px-4 flex items-center gap-1 shadow-md" 
                   onKeyDown={e => handleCalculatorKeyDown(e, 'add')}
                   onClick={addPayment}
                 >
-                  ➕ Añadir
+                  <Plus size={14} /> Añadir
                 </button>
               </div>
 
@@ -811,24 +826,32 @@ export function Modals({
                 </table>
               </div>
 
-              <div className="win-window p-3 bg-gray-200 border-none">
-                <div className="flex justify-between font-bold text-xs text-black">
-                  <span>TOTAL PAGADO:</span>
+              <div className="win-window p-4 bg-gray-200 border-none shadow-md">
+                <div className="flex justify-between font-bold text-[10px] text-black/60 border-b border-gray-300 pb-1 uppercase tracking-widest">
+                  <span>Total Pagado:</span>
                   <span>${paymentState.totalPaidUsd.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between font-black text-lg mt-1 text-black">
-                  <span>{paymentState.totalPaidUsd >= getCartTotal() ? 'VUELTO:' : 'FALTA:'}</span>
-                  <div className="text-right">
-                    <div>${Math.abs(Math.round((paymentState.totalPaidUsd - getCartTotal()) * 100) / 100).toFixed(2)}</div>
-                    <div className="text-[10px] opacity-60">Bs {Math.abs(Math.round((paymentState.totalPaidUsd - getCartTotal()) * config.tasa * 100) / 100).toFixed(2)}</div>
+                <div className="flex justify-between items-start mt-2 text-black">
+                  <span className="font-black text-sm">{paymentState.totalPaidUsd >= getCartTotal() ? 'VUELTO:' : 'FALTA:'}</span>
+                  <div className="text-right flex flex-col items-end">
+                    <div className="font-black text-3xl leading-none">${Math.abs(Math.round((paymentState.totalPaidUsd - getCartTotal()) * 100) / 100).toFixed(2)}</div>
+                  </div>
+                </div>
+                {/* Monto en Bs Centrado y mas grande solicitado */}
+                <div className="flex justify-center mt-3">
+                  <div className="bg-black/5 px-6 py-2 rounded-xl border border-black/10 shadow-inner flex flex-col items-center">
+                    <span className="text-[9px] font-black text-black/40 uppercase tracking-widest mb-1">Equivalencia en Bolívares</span>
+                    <span className="font-black text-2xl text-black">
+                      Bs {Math.abs(Math.round((paymentState.totalPaidUsd - getCartTotal()) * config.tasa * 100) / 100).toFixed(2)}
+                    </span>
                   </div>
                 </div>
               </div>
 
-              <div className="modal-footer border-none">
+              <div className="modal-footer border-none pt-2">
                 <button className="btn w-full" onClick={onClose}>Cancelar</button>
                 {paymentState.totalPaidUsd >= getCartTotal() && (
-                  <button className="btn btn-success w-full h-12 text-lg" onClick={finalizeSale}>
+                  <button className="btn btn-success w-full h-14 text-xl shadow-lg border-2 border-white" onClick={finalizeSale}>
                     ✅ PROCESAR VENTA (F12)
                   </button>
                 )}
