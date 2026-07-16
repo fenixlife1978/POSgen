@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -47,16 +48,30 @@ export default function TeamPage() {
     getWorkers().then(setWorkers);
   }, []);
 
-  const filteredWorkers = workers.filter(w => 
-    w.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredWorkers = workers.filter(w => {
+    const term = searchTerm.toLowerCase();
+    return (w.name || "").toLowerCase().includes(term);
+  });
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast({
-      title: "Copiado",
-      description: "El enlace de tracking se ha copiado al portapapeles.",
-    });
+  const copyToClipboard = async (text: string) => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        toast({
+          title: "Copiado",
+          description: "El enlace de tracking se ha copiado al portapapeles.",
+        });
+      } else {
+        throw new Error('Clipboard API not available');
+      }
+    } catch (err) {
+      console.error('Error copying to clipboard:', err);
+      toast({
+        title: "Error",
+        description: "No se pudo copiar automáticamente. Por favor, selecciona el texto manualmente.",
+        variant: "destructive"
+      });
+    }
   };
 
   return (

@@ -30,8 +30,9 @@ export function SalesModule({
   if (!active) return null;
 
   const filteredSales = sales.filter(s => {
-    const matchesSearch = s.numero.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          s.cliente.toLowerCase().includes(searchTerm.toLowerCase());
+    const term = searchTerm.toLowerCase();
+    const matchesSearch = (s.numero || "").toLowerCase().includes(term) || 
+                          (s.cliente || "").toLowerCase().includes(term);
     const saleDate = new Date(s.fecha);
     const matchesFrom = filterFrom ? saleDate >= new Date(filterFrom) : true;
     const matchesTo = filterTo ? saleDate <= new Date(filterTo + 'T23:59:59') : true;

@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -81,8 +82,9 @@ export default function LeadsMonitorPage() {
   }, []);
 
   const filteredLeads = leads.filter(lead => {
-    const matchesSearch = lead.subId.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         lead.conversionId.toLowerCase().includes(searchTerm.toLowerCase());
+    const term = searchTerm.toLowerCase();
+    const matchesSearch = (lead.subId || "").toLowerCase().includes(term) || 
+                         (lead.conversionId || "").toLowerCase().includes(term);
     const matchesStatus = statusFilter === 'all' || lead.status === statusFilter;
     return matchesSearch && matchesStatus;
   });

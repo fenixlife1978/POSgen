@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -35,10 +36,11 @@ export default function CampaignsPage() {
     getCampaigns().then(setCampaigns);
   }, []);
 
-  const filteredCampaigns = campaigns.filter(c => 
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.agencyName.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredCampaigns = campaigns.filter(c => {
+    const term = searchTerm.toLowerCase();
+    return (c.name || "").toLowerCase().includes(term) ||
+           (c.agencyName || "").toLowerCase().includes(term);
+  });
 
   const handleToggleStatus = (id: string) => {
     setCampaigns(prev => prev.map(c => 
