@@ -65,7 +65,7 @@ export default function POSPage() {
           if (userDoc.exists()) {
             const userData = userDoc.data();
             setCurrentUser(userData);
-            setConfig(prev => ({ ...prev, vendedor: userData.name || user.email }));
+            setConfig(prev => ({ ...prev, vendedor: userData.name || user.email || 'OPERADOR' }));
             setIsLoggedIn(true);
           } else {
             // Caso bootstrap: Si el usuario existe en Auth pero no en Firestore (reseteo de DB)
@@ -82,7 +82,6 @@ export default function POSPage() {
           }
         } catch (error) {
           console.error("Error al cargar perfil:", error);
-          // Fallback de emergencia para no bloquear al usuario si Firestore falla
           setIsLoggedIn(true);
         }
       } else {
@@ -139,9 +138,11 @@ export default function POSPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, loginData.email, loginData.password);
+      // 1. Intentar autenticar con Firebase Auth
+      const userCredential = await signInWithEmailAndPassword(auth, loginData.email.trim(), loginData.password);
       const user = userCredential.user;
 
+      // 2. Verificar perfil en Firestore
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       if (userDoc.exists()) {
         const userData = userDoc.data();
@@ -151,7 +152,7 @@ export default function POSPage() {
           return;
         }
       } else {
-        // Si no hay documento pero el login fue exitoso, es un bootstrap admin
+        // Lógica Bootstrap: Si no hay documento pero el login en Auth fue exitoso
         if (loginData.role !== 'Administrador') {
           await signOut(auth);
           notify('Solo el Administrador puede inicializar el sistema.', 'error');
@@ -160,8 +161,14 @@ export default function POSPage() {
       }
       notify('Acceso concedido. Cargando sistema...');
     } catch (error: any) {
-      console.error(error);
-      notify('Error de acceso. Verifique sus credenciales y el rol seleccionado.', 'error');
+      console.error("Login Error:", error.code, error.message);
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        notify('Credenciales incorrectas. Verifique email y contraseña.', 'error');
+      } else if (error.code === 'auth/too-many-requests') {
+        notify('Demasiados intentos. Intente más tarde.', 'error');
+      } else {
+        notify('Error de acceso. Asegúrese de que el usuario existe en Firebase Console.', 'error');
+      }
     }
   };
 
@@ -175,7 +182,7 @@ export default function POSPage() {
     if (el) {
       el.textContent = msg;
       el.className = `notification show ${type}`;
-      setTimeout(() => el.className = 'notification', 3000);
+      setTimeout(() => el.className = 'notification', 3500);
     }
   };
 
@@ -195,7 +202,7 @@ export default function POSPage() {
           <div className="login-title">Acceso Nube - POS Pro</div>
           <form onSubmit={handleLogin}>
             <div className="form-group">
-              <label>Correo Electrónico:</label>
+              <label>Email de Usuario:</label>
               <input 
                 type="email" 
                 required 
@@ -207,7 +214,7 @@ export default function POSPage() {
               />
             </div>
             <div className="form-group">
-              <label>Rol de Usuario:</label>
+              <label>Rol de Acceso:</label>
               <select 
                 value={loginData.role} 
                 onChange={e => setLoginData({...loginData, role: e.target.value})}
@@ -233,6 +240,9 @@ export default function POSPage() {
               <button type="submit" className="btn btn-primary">Iniciar Sesión</button>
             </div>
           </form>
+          <div style={{marginTop: '15px', fontSize: '10px', color: '#666', borderTop: '1px solid #999', paddingTop: '10px'}}>
+            * Asegúrese de haber creado el usuario en la Consola de Firebase.
+          </div>
           <div id="notification" className="notification"></div>
         </div>
       </div>
