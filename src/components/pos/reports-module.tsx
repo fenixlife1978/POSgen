@@ -23,7 +23,7 @@ export function ReportsModule({ active, sales, products, clients, config }: Repo
   const renderReportContent = () => {
     switch (selectedReport) {
       case 'ventas':
-        const filteredSales = sales.filter(s => s.fecha.startsWith(filterDate) && s.estado === 'Completada');
+        const filteredSales = sales.filter(s => s.fecha && s.fecha.startsWith(filterDate) && s.estado === 'Completada');
         return (
           <div className="space-y-4 animate-in fade-in duration-300">
             <div className="toolbar">
@@ -48,19 +48,22 @@ export function ReportsModule({ active, sales, products, clients, config }: Repo
                     <tr key={s.numero}>
                       <td>{s.numero}</td>
                       <td>{s.cliente}</td>
-                      <td style={{ textAlign: 'right' }}>${s.subtotal.toFixed(2)}</td>
-                      <td style={{ textAlign: 'right' }}>${s.iva.toFixed(2)}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 'bold' }}>${s.totalUsd.toFixed(2)}</td>
-                      <td style={{ textAlign: 'right' }}>{s.totalBs.toFixed(2)}</td>
+                      <td style={{ textAlign: 'right' }}>${(s.subtotal || 0).toFixed(2)}</td>
+                      <td style={{ textAlign: 'right' }}>${(s.iva || 0).toFixed(2)}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold' }}>${(s.totalUsd || 0).toFixed(2)}</td>
+                      <td style={{ textAlign: 'right' }}>{(s.totalBs || 0).toFixed(2)}</td>
                     </tr>
                   ))}
+                  {filteredSales.length === 0 && (
+                    <tr><td colSpan={6} style={{ textAlign: 'center', padding: '40px' }}>No hay ventas en esta fecha</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>
             <div className="bottom-totals" style={{ justifyContent: 'flex-end', background: '#eee', padding: '10px' }}>
               <div className="total-box">
                 <span className="total-label">Total del Día:</span>
-                <div className="total-value">${filteredSales.reduce((acc, s) => acc + s.totalUsd, 0).toFixed(2)}</div>
+                <div className="total-value">${filteredSales.reduce((acc, s) => acc + (s.totalUsd || 0), 0).toFixed(2)}</div>
               </div>
             </div>
           </div>
@@ -81,7 +84,7 @@ export function ReportsModule({ active, sales, products, clients, config }: Repo
                     <th>Código</th>
                     <th>Descripción</th>
                     <th style={{ textAlign: 'center' }}>Stock</th>
-                    <th style={{ textAlign: 'right' }}>Costo Prom.</th>
+                    <th style={{ textAlign: 'right' }}>Costo Prom..</th>
                     <th style={{ textAlign: 'right' }}>Valor Total</th>
                     <th style={{ textAlign: 'center' }}>Estado</th>
                   </tr>
@@ -92,7 +95,7 @@ export function ReportsModule({ active, sales, products, clients, config }: Repo
                       <td>{p.codigo}</td>
                       <td>{p.nombre}</td>
                       <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{p.stock}</td>
-                      <td style={{ textAlign: 'right' }}>${p.costoPromedio.toFixed(2)}</td>
+                      <td style={{ textAlign: 'right' }}>${(p.costoPromedio || 0).toFixed(2)}</td>
                       <td style={{ textAlign: 'right' }}>${(p.stock * p.costoPromedio).toFixed(2)}</td>
                       <td style={{ textAlign: 'center' }}>
                         {p.stock <= p.stockMin ? (p.stock === 0 ? '🔴 AGOTADO' : '🟡 BAJO') : '🟢 OK'}
@@ -125,9 +128,9 @@ export function ReportsModule({ active, sales, products, clients, config }: Repo
                       <td style={{ fontWeight: 'bold' }}>{c.nombre}</td>
                       <td>{c.tipoRif}-{c.rifNum}</td>
                       <td>{c.telefono}</td>
-                      <td style={{ textAlign: 'right' }}>${c.credito.toFixed(2)}</td>
+                      <td style={{ textAlign: 'right' }}>${(c.credito || 0).toFixed(2)}</td>
                       <td style={{ textAlign: 'right', color: c.saldo > 0 ? 'red' : 'green', fontWeight: 'bold' }}>
-                        ${c.saldo.toFixed(2)}
+                        ${(c.saldo || 0).toFixed(2)}
                       </td>
                     </tr>
                   ))}
@@ -140,7 +143,9 @@ export function ReportsModule({ active, sales, products, clients, config }: Repo
       case 'vendedor':
         const sellerStats: Record<string, number> = {};
         sales.filter(s => s.estado === 'Completada').forEach(s => {
-          sellerStats[s.vendedor] = (sellerStats[s.vendedor] || 0) + s.totalUsd;
+          if (s.vendedor) {
+            sellerStats[s.vendedor] = (sellerStats[s.vendedor] || 0) + (s.totalUsd || 0);
+          }
         });
         return (
           <div className="space-y-4 animate-in fade-in duration-300">
@@ -162,9 +167,12 @@ export function ReportsModule({ active, sales, products, clients, config }: Repo
       case 'categoria':
         const catStats: Record<string, number> = {};
         sales.filter(s => s.estado === 'Completada').forEach(s => {
-          s.items.forEach(item => {
-            catStats[item.categoria] = (catStats[item.categoria] || 0) + (item.precioUsd * item.cantidad);
-          });
+          if (s.items) {
+            s.items.forEach(item => {
+              const cat = item.categoria || 'Sin Categoría';
+              catStats[cat] = (catStats[cat] || 0) + (item.precioUsd * item.cantidad);
+            });
+          }
         });
         return (
           <div className="space-y-4 animate-in fade-in duration-300">
@@ -184,20 +192,25 @@ export function ReportsModule({ active, sales, products, clients, config }: Repo
         );
 
       case 'cierre':
-        const todaySales = sales.filter(s => s.fecha.startsWith(filterDate) && s.estado === 'Completada');
+        const todaySales = sales.filter(s => s.fecha && s.fecha.startsWith(filterDate) && s.estado === 'Completada');
         const paymentMethods = ["Efectivo Bs.", "Efectivo USD", "Tarjeta/Punto", "Biopago", "Pagomovil", "Zelle", "Transferencia"];
-        const methodTotals: Record<string, number> = {};
+        const methodTotals: Record<string, { usd: number, bs: number }> = {};
         
         todaySales.forEach(s => {
-            // Buscamos qué métodos se usaron en esta venta basada en el string s.pago
-            paymentMethods.forEach(m => {
+            if (s.detallesPago && s.detallesPago.length > 0) {
+              s.detallesPago.forEach(dp => {
+                if (!methodTotals[dp.method]) methodTotals[dp.method] = { usd: 0, bs: 0 };
+                methodTotals[dp.method].usd += (dp.usd || 0);
+                methodTotals[dp.method].bs += (dp.bs || 0);
+              });
+            } else if (s.pago) {
+              paymentMethods.forEach(m => {
                 if (s.pago.includes(m)) {
-                    // Nota: En una versión real, cada pago individual tendría su monto.
-                    // Aquí, si la venta tiene un solo método, le asignamos el total.
-                    // Si tiene varios, lo simplificamos para este reporte.
-                    methodTotals[m] = (methodTotals[m] || 0) + s.totalUsd;
+                  if (!methodTotals[m]) methodTotals[m] = { usd: 0, bs: 0 };
+                  methodTotals[m].usd += (s.totalUsd || 0);
                 }
-            });
+              });
+            }
         });
 
         return (
@@ -209,26 +222,35 @@ export function ReportsModule({ active, sales, products, clients, config }: Repo
             </div>
             <div className="grid grid-cols-2 gap-4">
                 <div className="settings-section">
-                    <h3>Resumen por Instrumento de Pago</h3>
-                    <table className="data-table">
-                        <thead><tr><th>Método</th><th style={{textAlign:'right'}}>Monto USD</th></tr></thead>
-                        <tbody>
-                            {paymentMethods.map(m => (
-                                <tr key={m}>
-                                    <td>{m}</td>
-                                    <td style={{textAlign:'right', fontWeight:'bold'}}>${(methodTotals[m] || 0).toFixed(2)}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                    <h3>Resumen Detallado por Moneda y Método</h3>
+                    <div className="table-responsive h-64">
+                      <table className="data-table">
+                          <thead>
+                            <tr>
+                              <th>Método de Pago</th>
+                              <th style={{textAlign:'right'}}>Total USD</th>
+                              <th style={{textAlign:'right'}}>Total Bs.</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                              {paymentMethods.map(m => (
+                                  <tr key={m}>
+                                      <td className="font-bold">{m}</td>
+                                      <td style={{textAlign:'right', color: '#000080'}}>${(methodTotals[m]?.usd || 0).toFixed(2)}</td>
+                                      <td style={{textAlign:'right', color: '#c04040'}}>Bs. {(methodTotals[m]?.bs || 0).toFixed(2)}</td>
+                                  </tr>
+                              ))}
+                          </tbody>
+                      </table>
+                    </div>
                 </div>
                 <div className="settings-section flex flex-col justify-center items-center bg-gray-200">
                     <div className="dash-label">TOTAL GENERAL DEL CIERRE</div>
                     <div className="text-4xl font-black text-blue-900">
-                        ${todaySales.reduce((acc, s) => acc + s.totalUsd, 0).toFixed(2)}
+                        ${todaySales.reduce((acc, s) => acc + (s.totalUsd || 0), 0).toFixed(2)}
                     </div>
                     <div className="text-xl font-bold text-gray-600 mt-2">
-                        Bs. {(todaySales.reduce((acc, s) => acc + s.totalUsd, 0) * config.tasa).toFixed(2)}
+                        Bs. {(todaySales.reduce((acc, s) => acc + (s.totalUsd || 0), 0) * config.tasa).toFixed(2)}
                     </div>
                     <div className="mt-4 text-[10px] font-bold uppercase text-gray-500">
                         Documentos Procesados: {todaySales.length}

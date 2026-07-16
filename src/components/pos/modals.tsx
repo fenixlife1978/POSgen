@@ -400,6 +400,7 @@ export function Modals({
       totalUsd: totalUsd,
       totalBs: Math.round(totalUsd * config.tasa * 100) / 100,
       pago: paymentState.payments.map(p => p.method).join(', '),
+      detallesPago: [...paymentState.payments],
       recibidoUsd: paymentState.totalPaidUsd,
       recibidoBs: Math.round(paymentState.totalPaidUsd * config.tasa * 100) / 100,
       cambioUsd: Math.max(0, Math.round((paymentState.totalPaidUsd - totalUsd) * 100) / 100),

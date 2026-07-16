@@ -94,6 +94,7 @@ export interface Sale {
   referencia: string;
   credito: boolean;
   estado: 'Completada' | 'Anulada';
+  detallesPago?: { method: string, usd: number, bs: number }[];
 }
 
 export interface Account {
