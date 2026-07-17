@@ -163,6 +163,7 @@ export interface ReportZRecord {
   facturaFin: string;
   ventaBruta: number;
   ventaNeta: number;
+  baseImponible: number;
   ivaTotal: number;
   igtfTotal: number;
   exentoTotal: number;
@@ -170,5 +171,8 @@ export interface ReportZRecord {
   gastosTotal: number;
   trasladosTotal: number;
   grandTotalAcumulado: number;
-  desglosePagos: { method: string, usd: number, bs: number }[];
+  efectivoSistema: number;
+  efectivoReal: number;
+  diferencia: number;
+  desglosePagos: { method: string, total: number }[];
 }

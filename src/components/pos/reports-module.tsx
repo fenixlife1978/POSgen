@@ -5,7 +5,7 @@ import React, { useState } from 'react';
 import { Sale, Product, Client, ReportZRecord, CashMovement } from '@/types/pos';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '@/lib/firebase';
-import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { TrendingUp, DollarSign, ArrowRightLeft, History, FileText, Activity } from 'lucide-react';
 
 interface ReportsModuleProps {
@@ -34,145 +34,77 @@ export function ReportsModule({ active, sales, products, clients, config, setCon
     }
     
     const completions = daySales.filter(s => s.estado === 'Completada');
+    const anulacionesCount = daySales.filter(s => s.estado === 'Anulada').length;
     
-    const ventaBruta = completions.reduce((acc, s) => acc + (s.subtotal || 0), 0);
+    const baseImponible = completions.reduce((acc, s) => acc + (s.subtotal || 0), 0);
     const ivaTotal = completions.reduce((acc, s) => acc + (s.iva || 0), 0);
-    const ventaNeta = ventaBruta + ivaTotal;
+    const ventaNeta = baseImponible + ivaTotal;
 
     const cashQuery = termId === 'all' 
       ? query(collection(db, 'accounting/audit/cash_movements'), where('fecha', '>=', date), where('fecha', '<=', date + 'T23:59:59'))
       : query(collection(db, 'accounting/audit/cash_movements'), where('fecha', '>=', date), where('fecha', '<=', date + 'T23:59:59'), where('terminalId', '==', termId));
     
     const cashSnapshot = await getDocs(cashQuery);
-    const cashLogs = cashSnapshot.docs.map(d => d.data());
+    const cashLogs = cashSnapshot.docs.map(d => d.data() as CashMovement);
     
     const gastos = cashLogs.filter(l => l.concepto.includes('GASTO')).reduce((s, l) => s + l.montoUsd, 0);
     const traslados = cashLogs.filter(l => l.concepto.includes('TRASLADO')).reduce((s, l) => s + l.montoUsd, 0);
+    const fondoInicial = cashLogs.find(l => l.referencia === 'APERTURA')?.montoUsd || 0;
 
     const facturas = completions.sort((a,b) => a.numero.localeCompare(b.numero));
 
+    // Desglose por método de pago para el sistema
+    const methodTotals = { efectivo: 0, tarjetas: 0, transferencias: 0 };
+    completions.forEach(s => {
+      if (s.detallesPago) {
+        s.detallesPago.forEach(p => {
+          const m = p.method.toLowerCase();
+          if (m.includes('efectivo')) methodTotals.efectivo += p.usd;
+          else if (m.includes('tarjeta')) methodTotals.tarjetas += p.usd;
+          else methodTotals.transferencias += p.usd;
+        });
+      }
+    });
+
+    const efectivoSistema = fondoInicial + methodTotals.efectivo + 
+      cashLogs.filter(l => l.tipo === 'INGRESO' && l.referencia !== 'APERTURA' && !l.concepto.includes('VENTA')).reduce((acc, l) => acc + l.montoUsd, 0) -
+      cashLogs.filter(l => l.tipo === 'EGRESO' && !l.concepto.includes('REEMBOLSO')).reduce((acc, l) => acc + l.montoUsd, 0);
+
     return {
-      ventaBruta, ivaTotal, ventaNeta, gastos, traslados,
+      baseImponible, ivaTotal, ventaNeta, gastos, traslados,
+      anulaciones: anulacionesCount,
       count: completions.length,
       facturaInicio: facturas[0]?.numero || '--',
-      facturaFin: facturas[facturas.length-1]?.numero || '--'
+      facturaFin: facturas[facturas.length-1]?.numero || '--',
+      efectivoSistema,
+      methodTotals
     };
   };
 
   const handleProcessX = async () => {
     if (selectedTerminal === 'all') return alert("Seleccione una terminal específica para el corte X.");
-    
-    const date = filterDate;
-    const termId = selectedTerminal;
-
-    // Filter sales for this terminal and date
-    const terminalSales = sales.filter(s => s.fecha.startsWith(date) && s.terminalId === termId);
-    const completions = terminalSales.filter(s => s.estado === 'Completada');
-
-    // Filter cash movements
-    const cashQuery = query(
-      collection(db, 'accounting/audit/cash_movements'), 
-      where('terminalId', '==', termId),
-      where('fecha', '>=', date), 
-      where('fecha', '<=', date + 'T23:59:59')
-    );
-    const cashSnapshot = await getDocs(cashQuery);
-    const cashLogs = cashSnapshot.docs.map(d => d.data() as CashMovement);
-
-    // Calculations
-    const fondoInicial = cashLogs.find(l => l.referencia === 'APERTURA')?.montoUsd || 0;
-    const ventasBrutas = completions.reduce((acc, s) => acc + s.totalUsd, 0);
-    const impuestos = completions.reduce((acc, s) => acc + s.iva, 0);
-
-    const breakdown = {
-      efectivo: 0,
-      tarjetas: 0,
-      transferencias: 0,
-      creditos: completions.filter(s => s.credito).reduce((acc, s) => acc + (s.totalUsd - (s.recibidoUsd || 0)), 0)
-    };
-
-    completions.forEach(s => {
-      if (s.detallesPago && s.detallesPago.length > 0) {
-        s.detallesPago.forEach(p => {
-          const method = p.method.toLowerCase();
-          if (method.includes('efectivo')) breakdown.efectivo += p.usd;
-          else if (method.includes('tarjeta') || method.includes('debito')) breakdown.tarjetas += p.usd;
-          else breakdown.transferencias += p.usd;
-        });
-      } else {
-        // Fallback
-        if (s.pago.toLowerCase().includes('efectivo')) breakdown.efectivo += s.recibidoUsd;
-        else if (s.pago.toLowerCase().includes('tarjeta')) breakdown.tarjetas += s.recibidoUsd;
-        else breakdown.transferencias += s.recibidoUsd;
-      }
-    });
-
-    const entradas = cashLogs.filter(l => l.tipo === 'INGRESO' && l.referencia !== 'APERTURA' && !l.concepto.includes('VENTA')).reduce((acc, l) => acc + l.montoUsd, 0);
-    const salidas = cashLogs.filter(l => l.tipo === 'EGRESO' && !l.concepto.includes('REEMBOLSO') && !l.concepto.includes('DEVOLUCION')).reduce((acc, l) => acc + l.montoUsd, 0);
-    const devoluciones = cashLogs.filter(l => l.concepto.includes('REEMBOLSO') || l.concepto.includes('DEVOLUCION')).reduce((acc, l) => acc + l.montoUsd, 0);
-
-    const efectivoTeorico = fondoInicial + breakdown.efectivo + entradas - salidas - devoluciones;
-
-    const statsX = {
+    const stats = await calculateDailyStats(filterDate, selectedTerminal);
+    onOpenModal('modalCorteX', {
       businessName: config.nombreEmpresa,
-      terminalId: termId,
-      date,
+      terminalId: selectedTerminal,
+      date: filterDate,
       time: new Date().toLocaleTimeString(),
       cashier: config.vendedor,
-      fondoInicial,
-      ventasBrutas,
-      breakdown,
-      impuestos,
-      entradas,
-      salidas,
-      devoluciones,
-      efectivoTeorico
-    };
-
-    onOpenModal('modalCorteX', statsX);
+      ...stats
+    });
   };
 
   const handleProcessZ = async () => {
-    if (selectedTerminal === 'all') return alert("Seleccione una terminal específica para emitir el reporte Z.");
-    
+    if (selectedTerminal === 'all') return alert("Seleccione una terminal específica para el reporte Z.");
     const stats = await calculateDailyStats(filterDate, selectedTerminal);
-    if (stats.count === 0 && stats.gastos === 0) return alert("No hay operaciones para cerrar hoy en esta terminal.");
-
-    if (confirm(`¿Emitir REPORTE Z N° ${config.reportZCounter} para Terminal ${selectedTerminal}?\nEste cierre consolidará Ventas, Gastos y Traslados de esta caja.`)) {
-      const zId = uuidv4();
-      const newZ: ReportZRecord = {
-        id: zId,
-        numero: config.reportZCounter,
-        fecha: filterDate,
-        vendedor: config.vendedor,
-        terminalId: selectedTerminal,
-        facturaInicio: stats.facturaInicio,
-        facturaFin: stats.facturaFin,
-        ventaBruta: stats.ventaBruta,
-        ventaNeta: stats.ventaNeta,
-        ivaTotal: stats.ivaTotal,
-        igtfTotal: stats.ventaNeta * 0.03,
-        exentoTotal: 0,
-        anulaciones: sales.filter(s => s.estado === 'Anulada' && s.fecha.startsWith(filterDate) && s.terminalId === selectedTerminal).length,
-        gastosTotal: stats.gastos,
-        trasladosTotal: stats.traslados,
-        grandTotalAcumulado: config.grandTotalHistory + stats.ventaNeta,
-        desglosePagos: []
-      };
-
-      try {
-        await setDoc(doc(db, 'accounting/audit/reportsZ', zId), newZ);
-        await setDoc(doc(db, 'system', 'config'), {
-          ...config,
-          reportZCounter: config.reportZCounter + 1,
-          grandTotalHistory: config.grandTotalHistory + stats.ventaNeta,
-          lastZDate: filterDate
-        });
-        alert(`Cierre Z procesado para terminal ${selectedTerminal}.`);
-      } catch (error) {
-        alert("Error al guardar el reporte Z.");
-      }
-    }
+    
+    // Abrir modal de preparación Z para ingresar el efectivo contado
+    onOpenModal('modalCorteZ', {
+      ...stats,
+      numeroZ: config.reportZCounter,
+      terminalId: selectedTerminal,
+      date: filterDate
+    });
   };
 
   return (
