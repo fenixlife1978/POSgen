@@ -2,11 +2,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Sale, Product, Client, ReportZRecord } from '@/types/pos';
+import { Sale, Product, Client, ReportZRecord, CashMovement } from '@/types/pos';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '@/lib/firebase';
 import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { TrendingUp, DollarSign, ArrowRightLeft, History, FileText } from 'lucide-react';
+import { TrendingUp, DollarSign, ArrowRightLeft, History, FileText, Activity } from 'lucide-react';
 
 interface ReportsModuleProps {
   active: boolean;
@@ -17,9 +17,10 @@ interface ReportsModuleProps {
   setConfig: React.Dispatch<React.SetStateAction<any>>;
   reportsZ: ReportZRecord[];
   setReportsZ: React.Dispatch<React.SetStateAction<ReportZRecord[]>>;
+  onOpenModal: (id: string, dataId?: any) => void;
 }
 
-export function ReportsModule({ active, sales, products, clients, config, setConfig, reportsZ }: ReportsModuleProps) {
+export function ReportsModule({ active, sales, products, clients, config, setConfig, reportsZ, onOpenModal }: ReportsModuleProps) {
   const [selectedReport, setSelectedReport] = useState<string | null>(null);
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedTerminal, setSelectedTerminal] = useState<string>(config.terminalId || 'all');
@@ -56,6 +57,79 @@ export function ReportsModule({ active, sales, products, clients, config, setCon
       facturaInicio: facturas[0]?.numero || '--',
       facturaFin: facturas[facturas.length-1]?.numero || '--'
     };
+  };
+
+  const handleProcessX = async () => {
+    if (selectedTerminal === 'all') return alert("Seleccione una terminal específica para el corte X.");
+    
+    const date = filterDate;
+    const termId = selectedTerminal;
+
+    // Filter sales for this terminal and date
+    const terminalSales = sales.filter(s => s.fecha.startsWith(date) && s.terminalId === termId);
+    const completions = terminalSales.filter(s => s.estado === 'Completada');
+
+    // Filter cash movements
+    const cashQuery = query(
+      collection(db, 'accounting/audit/cash_movements'), 
+      where('terminalId', '==', termId),
+      where('fecha', '>=', date), 
+      where('fecha', '<=', date + 'T23:59:59')
+    );
+    const cashSnapshot = await getDocs(cashQuery);
+    const cashLogs = cashSnapshot.docs.map(d => d.data() as CashMovement);
+
+    // Calculations
+    const fondoInicial = cashLogs.find(l => l.referencia === 'APERTURA')?.montoUsd || 0;
+    const ventasBrutas = completions.reduce((acc, s) => acc + s.totalUsd, 0);
+    const impuestos = completions.reduce((acc, s) => acc + s.iva, 0);
+
+    const breakdown = {
+      efectivo: 0,
+      tarjetas: 0,
+      transferencias: 0,
+      creditos: completions.filter(s => s.credito).reduce((acc, s) => acc + (s.totalUsd - (s.recibidoUsd || 0)), 0)
+    };
+
+    completions.forEach(s => {
+      if (s.detallesPago && s.detallesPago.length > 0) {
+        s.detallesPago.forEach(p => {
+          const method = p.method.toLowerCase();
+          if (method.includes('efectivo')) breakdown.efectivo += p.usd;
+          else if (method.includes('tarjeta') || method.includes('debito')) breakdown.tarjetas += p.usd;
+          else breakdown.transferencias += p.usd;
+        });
+      } else {
+        // Fallback
+        if (s.pago.toLowerCase().includes('efectivo')) breakdown.efectivo += s.recibidoUsd;
+        else if (s.pago.toLowerCase().includes('tarjeta')) breakdown.tarjetas += s.recibidoUsd;
+        else breakdown.transferencias += s.recibidoUsd;
+      }
+    });
+
+    const entradas = cashLogs.filter(l => l.tipo === 'INGRESO' && l.referencia !== 'APERTURA' && !l.concepto.includes('VENTA')).reduce((acc, l) => acc + l.montoUsd, 0);
+    const salidas = cashLogs.filter(l => l.tipo === 'EGRESO' && !l.concepto.includes('REEMBOLSO') && !l.concepto.includes('DEVOLUCION')).reduce((acc, l) => acc + l.montoUsd, 0);
+    const devoluciones = cashLogs.filter(l => l.concepto.includes('REEMBOLSO') || l.concepto.includes('DEVOLUCION')).reduce((acc, l) => acc + l.montoUsd, 0);
+
+    const efectivoTeorico = fondoInicial + breakdown.efectivo + entradas - salidas - devoluciones;
+
+    const statsX = {
+      businessName: config.nombreEmpresa,
+      terminalId: termId,
+      date,
+      time: new Date().toLocaleTimeString(),
+      cashier: config.vendedor,
+      fondoInicial,
+      ventasBrutas,
+      breakdown,
+      impuestos,
+      entradas,
+      salidas,
+      devoluciones,
+      efectivoTeorico
+    };
+
+    onOpenModal('modalCorteX', statsX);
   };
 
   const handleProcessZ = async () => {
@@ -108,7 +182,7 @@ export function ReportsModule({ active, sales, products, clients, config, setCon
       <div className="toolbar mt-4">
         <button className={`btn ${selectedReport === 'ventas' ? 'btn-primary' : ''}`} onClick={() => setSelectedReport('ventas')}>📋 Libro Ventas</button>
         <button className={`btn ${selectedReport === 'gastos' ? 'btn-primary' : ''}`} onClick={() => setSelectedReport('gastos')}>💸 Gastos/Traslados</button>
-        <button className={`btn ${selectedReport === 'cierre' ? 'btn-primary' : ''}`} onClick={() => setSelectedReport('cierre')}>💰 Cierre Z (Fiscal)</button>
+        <button className={`btn ${selectedReport === 'cierre' ? 'btn-primary' : ''}`} onClick={() => setSelectedReport('cierre')}>💰 Cierre de Caja</button>
         
         <div className="flex gap-2 items-center ml-auto">
            <label className="text-[10px] font-bold">TERMINAL:</label>
@@ -124,11 +198,22 @@ export function ReportsModule({ active, sales, products, clients, config, setCon
       <div className="chart-container mt-4" style={{ flex: 1, overflowY: 'auto' }}>
         {selectedReport === 'cierre' && (
           <div className="p-4 space-y-6">
-            <div className="win-window p-8 text-center bg-gray-200 border-2 border-blue-800">
-               <h3 className="text-2xl font-black text-blue-900 mb-4 uppercase">Corte de Caja Diario (Z)</h3>
-               <p className="text-sm font-bold text-gray-600 mb-2">Emisión de reporte fiscal consolidado para: {filterDate}</p>
-               <p className="text-[10px] font-black text-red-600 mb-6 uppercase">TERMINAL SELECCIONADA: {selectedTerminal === 'all' ? 'SIN SELECCIONAR' : selectedTerminal}</p>
-               <button className="btn btn-success p-10 text-xl font-black shadow-lg" disabled={selectedTerminal === 'all'} onClick={handleProcessZ}>🚀 EMITIR REPORTE Z N° {config.reportZCounter}</button>
+            <div className="grid grid-cols-2 gap-6">
+              <div className="win-window p-8 text-center bg-gray-200 border-2 border-primary">
+                 <h3 className="text-xl font-black text-primary mb-4 uppercase">Corte de Caja Parcial (X)</h3>
+                 <p className="text-xs font-bold text-gray-600 mb-6 italic">Consulta informativa de la jornada actual sin cierre fiscal.</p>
+                 <button className="btn btn-primary p-6 text-lg font-black shadow-lg flex items-center gap-3 mx-auto" disabled={selectedTerminal === 'all'} onClick={handleProcessX}>
+                    <Activity size={24}/> EMITIR CORTE X
+                 </button>
+              </div>
+
+              <div className="win-window p-8 text-center bg-gray-200 border-2 border-blue-800">
+                 <h3 className="text-xl font-black text-blue-900 mb-4 uppercase">Corte de Caja Diario (Z)</h3>
+                 <p className="text-xs font-bold text-gray-600 mb-6 italic">Emisión de reporte fiscal consolidado y cierre de terminal.</p>
+                 <button className="btn btn-success p-6 text-lg font-black shadow-lg flex items-center gap-3 mx-auto" disabled={selectedTerminal === 'all'} onClick={handleProcessZ}>
+                    <FileText size={24}/> EMITIR REPORTE Z
+                 </button>
+              </div>
             </div>
 
             <div className="table-responsive w-full mt-8">

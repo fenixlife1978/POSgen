@@ -63,7 +63,7 @@ export default function POSPage() {
           if (userDoc.exists()) {
             const userData = userDoc.data();
             setCurrentUser(userData);
-            setConfig(prev => ({ ...prev, vendedor: userData.name || user.email || 'OPERADOR' }));
+            setConfig(prev => ({ ...prev, vendedor: userData.name || user.email || 'OPERADOR', terminalId: userData.terminalId || 'CAJA-01' }));
             setIsLoggedIn(true);
           } else {
             setCurrentUser({ id: user.uid, email: user.email, role: 'Administrador', name: 'Admin Cloud' });
@@ -130,7 +130,7 @@ export default function POSPage() {
       <div id="notification" className="notification"></div>
       <div className="dollar-bar">
         <span>💲 TASA BCV: <strong>{config.tasa.toFixed(2)}</strong></span>
-        <span style={{ marginLeft: 'auto', fontSize: '11px' }}>{config.nombreEmpresa} | {currentUser?.name} ({currentUser?.role})</span>
+        <span style={{ marginLeft: 'auto', fontSize: '11px' }}>{config.nombreEmpresa} | {currentUser?.name} ({currentUser?.role}) | Terminal: {config.terminalId}</span>
       </div>
       <div className="nav-tabs">
         {[{ id: 'pos', label: 'Venta (POS)' }, { id: 'dashboard', label: 'Resumen' }, { id: 'productos', label: 'Repuestos' }, { id: 'clientes', label: 'Clientes' }, { id: 'ventas', label: 'Historial' }, { id: 'reportes', label: 'Contabilidad' }, { id: 'cuentas', label: 'Cuentas x Cobrar/Pagar' }, { id: 'config', label: 'Ajustes' }].map(m => (
@@ -144,7 +144,7 @@ export default function POSPage() {
         <ClientsModule active={activeModule === 'clientes'} onOpenModal={openModal} clients={clients} setClients={setClients} notify={notify} />
         <SalesModule active={activeModule === 'ventas'} sales={sales} setSales={setSales} products={products} setProducts={setProducts} movements={movements} setMovements={setMovements} notify={notify} onOpenModal={openModal} config={config} />
         <InventoryModule active={activeModule === 'inventario'} onOpenModal={openModal} products={products} movements={movements} />
-        <ReportsModule active={activeModule === 'reportes'} sales={sales} products={products} clients={clients} config={config} setConfig={setConfig} setReportsZ={setReportsZ} reportsZ={reportsZ} />
+        <ReportsModule active={activeModule === 'reportes'} sales={sales} products={products} clients={clients} config={config} setConfig={setConfig} setReportsZ={setReportsZ} reportsZ={reportsZ} onOpenModal={openModal} />
         <AccountsModule active={activeModule === 'cuentas'} accounts={accounts} movements={movements} />
         <ConfigModule active={activeModule === 'config'} onOpenModal={openModal} config={config} setConfig={setConfig} notify={notify} />
       </div>

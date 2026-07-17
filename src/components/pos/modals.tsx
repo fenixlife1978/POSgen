@@ -9,7 +9,7 @@ import {
   Package, UserCircle, Truck, 
   RefreshCcw, DollarSign,
   PlusCircle, FileText, Plus, Minus, Layers, Wrench, Banknote, History,
-  ArrowRightLeft, LogOut, ChevronDown, CheckCircle2
+  ArrowRightLeft, LogOut, ChevronDown, CheckCircle2, Activity, Clock, Printer
 } from 'lucide-react';
 import { db, auth } from '@/lib/firebase';
 import { doc, setDoc, writeBatch, updateDoc, collection, onSnapshot, query, where } from 'firebase/firestore';
@@ -508,6 +508,54 @@ export function Modals({
   return (
     <div className="modal-overlay active" onClick={() => { if(!lastSale) onClose(); else setLastSale(null); }}>
       
+      {activeModal === 'modalCorteX' && editingId && (
+        <div className="modal-window" style={{ width: '450px' }} onClick={e => e.stopPropagation()}>
+           <div className="win-titlebar">
+              <span className="flex items-center gap-2"><Activity size={14}/> CORTE DE CAJA PARCIAL (X)</span>
+              <span className="modal-close" onClick={onClose}></span>
+           </div>
+           <div className="modal-body p-6 space-y-4 bg-white font-mono text-[11px]">
+              <div className="text-center border-b-2 border-black pb-4 mb-4">
+                 <h2 className="text-sm font-black uppercase">{editingId.businessName}</h2>
+                 <p className="font-bold">ID TERMINAL: {editingId.terminalId}</p>
+                 <p>{editingId.date} | {editingId.time}</p>
+                 <p className="uppercase">Cajero: {editingId.cashier}</p>
+              </div>
+
+              <div className="space-y-1">
+                 <div className="flex justify-between font-bold"><span>FONDO INICIAL:</span> <span>${editingId.fondoInicial.toFixed(2)}</span></div>
+                 <div className="flex justify-between font-bold text-blue-800"><span>VENTAS TOTALES BRUTAS:</span> <span>${editingId.ventasBrutas.toFixed(2)}</span></div>
+                 <div className="flex justify-between text-gray-500"><span>IMPUESTOS (IVA):</span> <span>${editingId.impuestos.toFixed(2)}</span></div>
+              </div>
+
+              <div className="bg-gray-100 p-2 border border-gray-300">
+                 <p className="font-black border-b border-gray-400 mb-1">DESGLOSE POR MÉTODO:</p>
+                 <div className="flex justify-between"><span>Efectivo (Cash):</span> <span>${editingId.breakdown.efectivo.toFixed(2)}</span></div>
+                 <div className="flex justify-between"><span>Tarjetas:</span> <span>${editingId.breakdown.tarjetas.toFixed(2)}</span></div>
+                 <div className="flex justify-between"><span>Transf. / Digital:</span> <span>${editingId.breakdown.transferencias.toFixed(2)}</span></div>
+                 <div className="flex justify-between text-red-600"><span>Créditos Clientes:</span> <span>${editingId.breakdown.creditos.toFixed(2)}</span></div>
+              </div>
+
+              <div className="space-y-1 border-y border-dashed border-black py-2">
+                 <div className="flex justify-between"><span>ENTRADAS (CAMBIO):</span> <span className="text-emerald-600">+${editingId.entradas.toFixed(2)}</span></div>
+                 <div className="flex justify-between"><span>SALIDAS (RETIROS):</span> <span className="text-red-600">-${editingId.salidas.toFixed(2)}</span></div>
+                 <div className="flex justify-between"><span>DEVOLUCIONES:</span> <span className="text-red-600">-${editingId.devoluciones.toFixed(2)}</span></div>
+              </div>
+
+              <div className="bg-black text-yellow-400 p-3 text-center border-2 border-yellow-400">
+                 <p className="text-[10px] font-bold">EFECTIVO TEÓRICO EN CAJA</p>
+                 <p className="text-2xl font-black">${editingId.efectivoTeorico.toFixed(2)}</p>
+              </div>
+
+              <p className="text-[9px] text-center text-gray-500 italic">** Consulta informativa. No cierra la terminal fiscalmente. **</p>
+           </div>
+           <div className="modal-footer flex gap-2">
+              <button className="btn flex items-center gap-2" onClick={() => window.print()}><Printer size={14}/> Imprimir</button>
+              <button className="btn ml-auto" onClick={onClose}>Cerrar</button>
+           </div>
+        </div>
+      )}
+
       {activeModal === 'modalNuevoUsuario' && (
         <div className="modal-window" style={{ width: '400px' }} onClick={e => e.stopPropagation()}>
           <div className="win-titlebar">
@@ -1024,6 +1072,7 @@ export function Modals({
                   <select ref={methodRef} value={paymentState.method} onChange={e => setPaymentState({...paymentState, method: e.target.value})} className="win-input font-bold">
                     <option value="Efectivo USD">💵 Efectivo USD</option>
                     <option value="Efectivo Bs.">💸 Efectivo Bs.</option>
+                    <option value="Tarjeta">💳 Tarjeta (Deb/Cred)</option>
                     <option value="Pagomovil">📲 Pagomovil</option>
                     <option value="Zelle">🏦 Zelle</option>
                   </select>
@@ -1035,7 +1084,7 @@ export function Modals({
              </div>
              <button type="button" className="btn btn-primary w-full py-2 font-bold" onClick={() => {
                 if (!paymentState.amount) return;
-                const usd = paymentState.method.includes('USD') || paymentState.method === 'Zelle' ? paymentState.amount : paymentState.amount / config.tasa;
+                const usd = paymentState.method.includes('USD') || paymentState.method === 'Zelle' || paymentState.method === 'Tarjeta' ? paymentState.amount : paymentState.amount / config.tasa;
                 const bs = paymentState.method.includes('Bs.') || paymentState.method === 'Pagomovil' ? paymentState.amount : paymentState.amount * config.tasa;
                 const newPays = [...paymentState.payments, { method: paymentState.method, usd, bs }];
                 setPaymentState({...paymentState, payments: newPays, totalPaidUsd: newPays.reduce((s, p) => s + p.usd, 0), amount: 0});
