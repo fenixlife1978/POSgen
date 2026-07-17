@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Product, Client, CartItem } from '@/types/pos';
-import { Wallet, UserCheck, Plus, History } from 'lucide-react';
+import { Wallet, UserCheck, Plus, History, CreditCard } from 'lucide-react';
 
 interface PosModuleProps {
   active: boolean;
