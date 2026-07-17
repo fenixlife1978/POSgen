@@ -17,10 +17,10 @@ export interface Product {
   costoActual: number;
   costoPromedio: number;
   utilidadPorcentaje: number;
-  precio1: number;
-  precio2: number;
-  precio3: number;
-  precio4: number;
+  precio1: number; // Detal
+  precio2: number; // Mayor
+  precio3: number; // Promocion
+  precio4: number; // Costo (Venta)
   ivaAlicuota: number;
   permiteDescuento: boolean;
   activo: boolean;
@@ -31,9 +31,9 @@ export interface Product {
   capacidadContenido?: number;
   manejaPeso: boolean;
   isKit: boolean;
-  isService?: boolean;
-  stockPropio: boolean;
+  stockPropio: boolean; // Si es false y isKit es true, es Kit Virtual
   kitComponents: KitComponent[];
+  isService?: boolean;
   stock: number;
   stockMin: number;
   iva: number;
@@ -74,6 +74,8 @@ export interface CartItem {
   iva: number;
   cantidad: number;
   categoria: string;
+  isKit?: boolean;
+  stockPropio?: boolean;
 }
 
 export interface Sale {
@@ -106,15 +108,6 @@ export interface Account {
   estado: 'Pendiente' | 'Parcial' | 'Pagada';
   referencia: string;
   tipo: 'CXC' | 'CXP';
-}
-
-export interface Presupuesto {
-  numero: string;
-  fecha: string;
-  cliente: string;
-  items: CartItem[];
-  totalUsd: number;
-  estado: 'Pendiente' | 'Aprobado';
 }
 
 export interface User {

@@ -56,16 +56,32 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
     const isService = product.isService === true;
     const isVirtualKit = product.isKit && !product.stockPropio;
     
-    if (!isService && !isVirtualKit && product.stock <= 0) {
+    // VALIDACIÓN ESPECIAL PARA KITS VIRTUALES
+    if (isVirtualKit) {
+      const missingComponents = product.kitComponents.filter(comp => {
+        const compProd = products.find(p => p.codigo === comp.codigo);
+        return !compProd || compProd.stock < comp.cantidad;
+      });
+
+      if (missingComponents.length > 0) {
+        notify(`❌ Stock insuficiente en componentes del kit: ${missingComponents.map(c => c.codigo).join(', ')}`, 'error');
+        return;
+      }
+    } else if (!isService && product.stock <= 0) {
       notify(`❌ Producto sin existencia: ${product.codigo}`, 'error');
-      setSearchTerm('');
-      setSearchDropdown([]);
       return;
     }
 
     const existing = cart.find(item => item.codigo === product.codigo);
     if (existing) {
-      if (!isService && !isVirtualKit && existing.cantidad >= product.stock) {
+      // Re-verificar stock para incremento
+      if (isVirtualKit) {
+        const missing = product.kitComponents.some(comp => {
+          const cp = products.find(p => p.codigo === comp.codigo);
+          return !cp || cp.stock < (comp.cantidad * (existing.cantidad + 1));
+        });
+        if (missing) return notify('❌ No hay suficiente stock de componentes para agregar más kits', 'error');
+      } else if (!isService && existing.cantidad >= product.stock) {
         notify(`❌ No hay más stock disponible para ${product.codigo}`, 'error');
         return;
       }
@@ -78,12 +94,14 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
         precioUsd: product.precio1,
         iva: product.iva,
         cantidad: 1,
-        categoria: product.categoria
+        categoria: product.categoria,
+        isKit: product.isKit,
+        stockPropio: product.stockPropio
       }]);
     }
     setSearchTerm('');
     setSearchDropdown([]);
-    notify(`✅ ${product.codigo} agregado`);
+    notify(`✅ ${product.codigo} agregado al carrito`);
   };
 
   const getTotals = () => {
@@ -100,20 +118,12 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
 
   const totals = getTotals();
 
-  const handleRifSearch = (rif: string) => {
-    setClientInfo(prev => ({ ...prev, rif }));
-    const client = clients.find(c => c.rifNum === rif || `${c.tipoRif}-${c.rifNum}` === rif);
-    if (client) {
-      setClientInfo({ name: client.nombre, rif: `${client.tipoRif}-${client.rifNum}`, saldo: client.saldo });
-    }
-  };
-
   return (
     <div id="module-pos" className="module-panel active">
       <div className="header-section">
         <div className="header-row">
           <label style={{fontWeight:'bold'}}>Rif:</label>
-          <input type="text" value={clientInfo.rif} onChange={(e) => handleRifSearch(e.target.value)} placeholder="V-00000000-0" style={{ width: '120px' }} />
+          <input type="text" value={clientInfo.rif} onChange={(e) => setClientInfo({...clientInfo, rif: e.target.value})} placeholder="V-00000000-0" style={{ width: '120px' }} />
           <label style={{display:'flex', alignItems:'center', gap:'4px'}}><input type="checkbox" /> Crédito</label>
           <label style={{fontWeight:'bold', marginLeft:'10px'}}>N/Vendedor:</label>
           <span className="vendedor-name">{config.vendedor}</span>
@@ -151,7 +161,7 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
                   className={`search-dropdown-item ${!hasStock ? 'opacity-50 grayscale' : ''}`} 
                   onClick={() => hasStock ? addToCart(p) : notify('❌ Sin existencia', 'error')}
                 >
-                  <strong>{p.codigo}</strong> - {p.nombre} | <span style={{ color: '#000080' }}>{formatUSD(p.precio1)}</span> | Stock: {isService ? 'SERVICIO' : p.stock} {!hasStock && '(AGOTADO)'}
+                  <strong>{p.codigo}</strong> - {p.nombre} | <span style={{ color: '#000080' }}>{formatUSD(p.precio1)}</span> | Stock: {isVirtualKit ? 'VIRTUAL' : (isService ? 'SERVICIO' : p.stock)} {!hasStock && '(AGOTADO)'}
                 </div>
               );
             })}
