@@ -4,11 +4,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Product, Client, Provider, Sale, Account, CartItem, User, InventoryMovement } from '@/types/pos';
 import { v4 as uuidv4 } from 'uuid';
-import { Wallet, Search, Trash2, Save, CreditCard, UserPlus, Shield, Mail, Key } from 'lucide-react';
-import { db, auth } from '@/lib/firebase';
-import { doc, setDoc, writeBatch, collection } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
-import { initializeApp, deleteApp, getApp } from 'firebase/app';
+import { 
+  Wallet, Search, Trash2, Save, CreditCard, UserPlus, 
+  Shield, Mail, Key, Package, UserCircle, Truck, 
+  RefreshCcw, AlertCircle, TrendingUp, DollarSign
+} from 'lucide-react';
+import { db } from '@/lib/firebase';
+import { doc, setDoc, writeBatch, deleteDoc } from 'firebase/firestore';
+import { createUserWithEmailAndPassword, getAuth, signOut } from 'firebase/auth';
+import { initializeApp, getApp } from 'firebase/app';
 
 interface ModalsProps {
   activeModal: string | null;
@@ -39,36 +43,75 @@ interface ModalsProps {
 }
 
 export function Modals({ 
-  activeModal, onClose, products, clients, providers, sales, accounts, cart, setCart, 
-  config, notify, editingId, users, setUsers,
-  movements
+  activeModal, onClose, products, setProducts, clients, setClients, 
+  providers, setProviders, sales, setSales, accounts, setAccounts, 
+  cart, setCart, config, setConfig, notify, editingId, users, setUsers,
+  movements, setMovements
 }: ModalsProps) {
   
   const methodRef = useRef<HTMLSelectElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
 
   // Form states
-  const [productForm, setProductForm] = useState<Product | any>({});
+  const [productForm, setProductForm] = useState<Product | any>({
+    codigo: '', nombre: '', categoria: 'REPUESTOS', marca: 'GENERICO', 
+    costoPromedio: 0, utilidadPorcentaje: 30, precio1: 0, 
+    stock: 0, stockMin: 5, iva: 16, activo: true, isService: false
+  });
+
+  const [clientForm, setClientForm] = useState<Client | any>({
+    tipoRif: 'V', rifNum: '', nombre: '', telefono: '', email: '', direccion: '', saldo: 0
+  });
+
+  const [providerForm, setProviderForm] = useState<Provider | any>({
+    id: '', rif: '', nombre: '', direccion: '', contacto: '', telefono: ''
+  });
+
   const [userForm, setUserForm] = useState({ name: '', email: '', role: 'Cajero', password: '' });
   const [paymentState, setPaymentState] = useState({ method: 'Efectivo USD', amount: 0, payments: [] as any[], totalPaidUsd: 0 });
   const [lastSale, setLastSale] = useState<Sale | null>(null);
-  const [viewSale, setViewSale] = useState<Sale | null>(null);
 
+  // Efecto para cargar datos al editar
   useEffect(() => {
-    if (activeModal === 'modalProcesar') {
+    if (activeModal === 'modalProducto' && editingId !== null) {
+      setProductForm(products[editingId]);
+    } else if (activeModal === 'modalCliente' && editingId !== null) {
+      setClientForm(clients[editingId]);
+    } else if (activeModal === 'modalProveedor' && editingId !== null) {
+      const p = providers.find(prov => prov.id === editingId);
+      if (p) setProviderForm(p);
+    } else if (activeModal === 'modalProcesar') {
       setPaymentState({ method: 'Efectivo USD', amount: 0, payments: [], totalPaidUsd: 0 });
       setTimeout(() => methodRef.current?.focus(), 100);
     }
-  }, [activeModal]);
+  }, [activeModal, editingId]);
+
+  const handleSaveProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await setDoc(doc(db, 'products', productForm.codigo), productForm);
+      notify('✅ Producto guardado exitosamente');
+      onClose();
+    } catch (error) {
+      notify('❌ Error al guardar producto', 'error');
+    }
+  };
+
+  const handleSaveClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = `${clientForm.tipoRif}-${clientForm.rifNum}`;
+    try {
+      await setDoc(doc(db, 'clients', id), clientForm);
+      notify('✅ Cliente guardado');
+      onClose();
+    } catch (error) {
+      notify('❌ Error al guardar cliente', 'error');
+    }
+  };
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userForm.email || !userForm.password || !userForm.name) {
-      return notify('Todos los campos son obligatorios', 'error');
-    }
-
     try {
-      // Configuración de Firebase para instancia secundaria
       const firebaseConfig = {
         apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
         authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -78,50 +121,32 @@ export function Modals({
         appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
       };
 
-      // Usar una app secundaria para crear el usuario sin cerrar la sesión del admin
       let secondaryApp;
-      try {
-        secondaryApp = getApp('SecondaryApp');
-      } catch (e) {
-        secondaryApp = initializeApp(firebaseConfig, 'SecondaryApp');
+      try { secondaryApp = getApp('SecondaryApp'); } catch (e) { 
+        secondaryApp = initializeApp(firebaseConfig, 'SecondaryApp'); 
       }
       
       const secondaryAuth = getAuth(secondaryApp);
-      
-      // 1. Crear usuario en Auth
       const userCredential = await createUserWithEmailAndPassword(secondaryAuth, userForm.email, userForm.password);
       const uid = userCredential.user.uid;
 
-      // 2. Crear perfil en Firestore usando el UID como nombre de documento
       const newUserProfile = {
-        id: uid,
-        name: userForm.name,
-        email: userForm.email,
-        role: userForm.role,
-        active: true,
-        createdAt: new Date().toISOString()
+        id: uid, name: userForm.name, email: userForm.email, role: userForm.role, 
+        active: true, createdAt: new Date().toISOString()
       };
 
       await setDoc(doc(db, 'users', uid), newUserProfile);
-      
-      // Cerrar sesión en la app secundaria y limpiar
       await secondaryAuth.signOut();
       
-      notify('✅ Usuario creado exitosamente en Auth y Firestore');
-      setUserForm({ name: '', email: '', role: 'Cajero', password: '' });
+      notify('✅ Usuario creado exitosamente');
       onClose();
     } catch (error: any) {
-      console.error(error);
       notify(`❌ Error: ${error.message}`, 'error');
     }
   };
 
   const finalizeSale = async () => {
     const totalUsd = cart.reduce((acc, item) => acc + (item.precioUsd * item.cantidad * (1 + item.iva / 100)), 0);
-    if (paymentState.totalPaidUsd < totalUsd && !confirm("El monto pagado es menor al total. ¿Registrar como venta a crédito?")) {
-      return;
-    }
-
     const batch = writeBatch(db);
     const saleId = uuidv4();
     const sale: Sale = {
@@ -147,7 +172,6 @@ export function Modals({
 
     batch.set(doc(db, 'sales', saleId), sale);
     
-    // Actualizar inventario y logs
     for (const item of cart) {
       const product = products[item.productIndex];
       if (!product.isService) {
@@ -155,7 +179,9 @@ export function Modals({
         batch.update(doc(db, 'products', product.codigo), { stock: newStock });
         const logId = uuidv4();
         batch.set(doc(db, `products/${product.codigo}/logs`, logId), {
-          id: logId, fecha: sale.fecha, codigoProducto: product.codigo, tipo: 'VENTA', cantidad: -item.cantidad, stockPrevio: product.stock, stockNuevo: newStock, costo: product.costoPromedio, referencia: sale.numero, usuario: config.vendedor
+          id: logId, fecha: sale.fecha, codigoProducto: product.codigo, tipo: 'VENTA', 
+          cantidad: -item.cantidad, stockPrevio: product.stock, stockNuevo: newStock, 
+          costo: product.costoPromedio, referencia: sale.numero, usuario: config.vendedor
         });
       }
     }
@@ -167,79 +193,167 @@ export function Modals({
     onClose();
   };
 
-  if (!activeModal && !lastSale && !viewSale) return null;
+  if (!activeModal && !lastSale) return null;
 
   return (
-    <div className="modal-overlay active" onClick={() => { if(!lastSale && !viewSale) onClose(); else { setLastSale(null); setViewSale(null); } }}>
+    <div className="modal-overlay active" onClick={() => { if(!lastSale) onClose(); else setLastSale(null); }}>
       
-      {/* MODAL NUEVO USUARIO */}
-      {activeModal === 'modalNuevoUsuario' && (
-        <div className="modal-window" style={{ width: '400px' }} onClick={e => e.stopPropagation()}>
+      {/* MODAL FICHA MAESTRA PRODUCTO */}
+      {activeModal === 'modalProducto' && (
+        <div className="modal-window xlarge" onClick={e => e.stopPropagation()}>
           <div className="modal-titlebar">
-            <span className="flex items-center gap-2"><UserPlus size={16}/> CREAR NUEVO OPERADOR</span>
+            <span className="flex items-center gap-2"><Package size={16}/> FICHA MAESTRA DE ITEM</span>
             <span className="modal-close" onClick={onClose}>✕</span>
           </div>
-          <form onSubmit={handleCreateUser}>
-            <div className="modal-body space-y-4">
-              <div className="form-group">
-                <label className="flex items-center gap-2"><Shield size={14}/> Nombre Completo:</label>
-                <input 
-                  type="text" 
-                  required 
-                  value={userForm.name} 
-                  onChange={e => setUserForm({...userForm, name: e.target.value})} 
-                  className="win-input"
-                  placeholder="Ej: Juan Pérez"
-                />
-              </div>
-              <div className="form-group">
-                <label className="flex items-center gap-2"><Mail size={14}/> Correo Electrónico:</label>
-                <input 
-                  type="email" 
-                  required 
-                  value={userForm.email} 
-                  onChange={e => setUserForm({...userForm, email: e.target.value})} 
-                  className="win-input"
-                  placeholder="juan@sistema.com"
-                />
-              </div>
-              <div className="form-group">
-                <label className="flex items-center gap-2"><Key size={14}/> Contraseña:</label>
-                <input 
-                  type="password" 
-                  required 
-                  minLength={6}
-                  value={userForm.password} 
-                  onChange={e => setUserForm({...userForm, password: e.target.value})} 
-                  className="win-input"
-                  placeholder="Min. 6 caracteres"
-                />
-              </div>
-              <div className="form-group">
-                <label>Rol en Sistema:</label>
-                <select 
-                  value={userForm.role} 
-                  onChange={e => setUserForm({...userForm, role: e.target.value})} 
-                  className="win-input"
-                >
-                  <option value="Cajero">Cajero / Vendedor</option>
-                  <option value="Supervisor">Supervisor</option>
-                  <option value="Administrador">Administrador</option>
-                </select>
-              </div>
-              <div className="bg-blue-50 p-3 border border-blue-200 rounded text-[10px] text-blue-700">
-                INFO: El usuario podrá ingresar usando su correo y la contraseña definida. El perfil se creará automáticamente en Firestore.
+          <form onSubmit={handleSaveProduct}>
+            <div className="modal-body">
+              <div className="grid grid-cols-3 gap-6">
+                <div className="col-span-1 space-y-4">
+                  <div className="win-window p-4 bg-gray-300">
+                    <div className="form-group">
+                      <label>Código Interno:</label>
+                      <input type="text" required value={productForm.codigo} onChange={e => setProductForm({...productForm, codigo: e.target.value.toUpperCase()})} className="win-input font-bold" disabled={editingId !== null} />
+                    </div>
+                    <div className="form-group">
+                      <label>Código de Barras:</label>
+                      <input type="text" value={productForm.barcode || ''} onChange={e => setProductForm({...productForm, barcode: e.target.value})} className="win-input" />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label>Tipo de Item:</label>
+                    <select className="win-input" value={productForm.isService ? 'true' : 'false'} onChange={e => setProductForm({...productForm, isService: e.target.value === 'true'})}>
+                      <option value="false">📦 Producto Físico</option>
+                      <option value="true">🛠️ Servicio / Mano de Obra</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="col-span-2 space-y-4">
+                  <div className="form-group">
+                    <label>Nombre / Descripción del Artículo:</label>
+                    <input type="text" required value={productForm.nombre} onChange={e => setProductForm({...productForm, nombre: e.target.value})} className="win-input font-bold" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="form-group">
+                      <label>Categoría:</label>
+                      <select className="win-input" value={productForm.categoria} onChange={e => setProductForm({...productForm, categoria: e.target.value})}>
+                        <option value="REPUESTOS">REPUESTOS</option>
+                        <option value="LUBRICANTES">LUBRICANTES</option>
+                        <option value="ACCESORIOS">ACCESORIOS</option>
+                        <option value="SERVICIOS">SERVICIOS</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Marca:</label>
+                      <input type="text" value={productForm.marca} onChange={e => setProductForm({...productForm, marca: e.target.value})} className="win-input" />
+                    </div>
+                  </div>
+                  
+                  <div className="settings-section">
+                    <h3>💰 Costos y Precios (USD)</h3>
+                    <div className="grid grid-cols-4 gap-4">
+                      <div className="form-group">
+                        <label>Costo Prom.:</label>
+                        <input type="number" step="0.01" value={productForm.costoPromedio} onChange={e => {
+                          const costo = parseFloat(e.target.value) || 0;
+                          setProductForm({...productForm, costoPromedio: costo, precio1: Math.round(costo * (1 + productForm.utilidadPorcentaje/100) * 100)/100});
+                        }} className="win-input" />
+                      </div>
+                      <div className="form-group">
+                        <label>Utilidad %:</label>
+                        <input type="number" value={productForm.utilidadPorcentaje} onChange={e => {
+                          const util = parseFloat(e.target.value) || 0;
+                          setProductForm({...productForm, utilidadPorcentaje: util, precio1: Math.round(productForm.costoPromedio * (1 + util/100) * 100)/100});
+                        }} className="win-input" />
+                      </div>
+                      <div className="form-group">
+                        <label>Precio 1 (Venta):</label>
+                        <input type="number" step="0.01" value={productForm.precio1} onChange={e => setProductForm({...productForm, precio1: parseFloat(e.target.value) || 0})} className="win-input font-bold text-blue-800" />
+                      </div>
+                      <div className="form-group">
+                        <label>IVA %:</label>
+                        <input type="number" value={productForm.iva} onChange={e => setProductForm({...productForm, iva: parseFloat(e.target.value) || 0})} className="win-input" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="win-window p-3 bg-blue-100">
+                      <div className="form-group">
+                        <label>Stock Actual:</label>
+                        <input type="number" value={productForm.stock} onChange={e => setProductForm({...productForm, stock: parseFloat(e.target.value) || 0})} className="win-input font-bold" disabled={editingId !== null} />
+                      </div>
+                    </div>
+                    <div className="win-window p-3 bg-red-100">
+                      <div className="form-group">
+                        <label>Stock Mínimo:</label>
+                        <input type="number" value={productForm.stockMin} onChange={e => setProductForm({...productForm, stockMin: parseFloat(e.target.value) || 0})} className="win-input" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
             <div className="modal-footer">
               <button type="button" className="btn" onClick={onClose}>Cancelar</button>
-              <button type="submit" className="btn btn-primary font-bold">💾 REGISTRAR ACCESO</button>
+              <button type="submit" className="btn btn-primary font-bold">💾 GUARDAR PRODUCTO</button>
             </div>
           </form>
         </div>
       )}
 
-      {/* MODAL ABONAR CUENTA */}
+      {/* MODAL CLIENTE */}
+      {activeModal === 'modalCliente' && (
+        <div className="modal-window" style={{ width: '450px' }} onClick={e => e.stopPropagation()}>
+          <div className="modal-titlebar">
+            <span className="flex items-center gap-2"><UserCircle size={16}/> DATOS DEL CLIENTE</span>
+            <span className="modal-close" onClick={onClose}>✕</span>
+          </div>
+          <form onSubmit={handleSaveClient}>
+            <div className="modal-body space-y-4">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="form-group">
+                  <label>Tipo:</label>
+                  <select className="win-input" value={clientForm.tipoRif} onChange={e => setClientForm({...clientForm, tipoRif: e.target.value})}>
+                    <option value="V">V - Natural</option>
+                    <option value="J">J - Jurídico</option>
+                    <option value="G">G - Gub.</option>
+                    <option value="E">E - Extranjero</option>
+                  </select>
+                </div>
+                <div className="form-group col-span-2">
+                  <label>Número de RIF/Cédula:</label>
+                  <input type="text" required value={clientForm.rifNum} onChange={e => setClientForm({...clientForm, rifNum: e.target.value})} className="win-input font-bold" />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Nombre o Razón Social:</label>
+                <input type="text" required value={clientForm.nombre} onChange={e => setClientForm({...clientForm, nombre: e.target.value})} className="win-input font-bold" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="form-group">
+                  <label>Teléfono:</label>
+                  <input type="text" value={clientForm.telefono} onChange={e => setClientForm({...clientForm, telefono: e.target.value})} className="win-input" />
+                </div>
+                <div className="form-group">
+                  <label>Email:</label>
+                  <input type="email" value={clientForm.email} onChange={e => setClientForm({...clientForm, email: e.target.value})} className="win-input" />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Dirección Fiscal:</label>
+                <textarea value={clientForm.direccion} onChange={e => setClientForm({...clientForm, direccion: e.target.value})} className="win-input" rows={2} />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn btn-primary font-bold">💾 GUARDAR CLIENTE</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* MODAL COBRO POS (PROCESAR) */}
       {activeModal === 'modalProcesar' && (
         <div className="modal-window" style={{ width: '420px' }} onClick={e => e.stopPropagation()}>
           <div className="modal-titlebar">
@@ -269,71 +383,79 @@ export function Modals({
                <div className="form-group">
                   <label>Monto Recibido:</label>
                   <input 
-                    ref={amountRef} 
-                    type="number" 
+                    ref={amountRef} type="number" 
                     value={paymentState.amount || ''} 
                     onChange={e => setPaymentState({...paymentState, amount: parseFloat(e.target.value) || 0})} 
-                    onKeyPress={e => e.key === 'Enter' && amountRef.current?.blur()}
                     className="win-input font-bold text-lg text-right" 
                   />
                </div>
              </div>
 
-             <div className="flex gap-2">
-               <button className="btn btn-primary flex-1 py-3 font-bold" onClick={() => {
-                  if (!paymentState.amount) return;
-                  const usd = paymentState.method.includes('USD') || paymentState.method === 'Zelle' ? paymentState.amount : paymentState.amount / config.tasa;
-                  const bs = paymentState.method.includes('Bs.') || paymentState.method === 'Pagomovil' || paymentState.method === 'Punto de Venta' ? paymentState.amount : paymentState.amount * config.tasa;
-                  const newPays = [...paymentState.payments, { method: paymentState.method, usd, bs }];
-                  setPaymentState({...paymentState, payments: newPays, totalPaidUsd: newPays.reduce((s, p) => s + p.usd, 0), amount: 0});
-               }}>➕ REGISTRAR PAGO</button>
-               
-               <button className="btn" title="Pago Exacto" onClick={() => {
-                 const total = cart.reduce((s, i) => s + (i.precioUsd * i.cantidad * (1 + i.iva/100)), 0);
-                 const pending = total - paymentState.totalPaidUsd;
-                 const isBs = paymentState.method.includes('Bs.') || paymentState.method === 'Pagomovil' || paymentState.method === 'Punto de Venta';
-                 setPaymentState({...paymentState, amount: isBs ? Math.round(pending * config.tasa * 100)/100 : Math.round(pending * 100)/100});
-               }}>🎯</button>
-             </div>
+             <button className="btn btn-primary w-full py-2 font-bold" onClick={() => {
+                if (!paymentState.amount) return;
+                const usd = paymentState.method.includes('USD') || paymentState.method === 'Zelle' ? paymentState.amount : paymentState.amount / config.tasa;
+                const bs = paymentState.method.includes('Bs.') || paymentState.method === 'Pagomovil' || paymentState.method === 'Punto de Venta' ? paymentState.amount : paymentState.amount * config.tasa;
+                const newPays = [...paymentState.payments, { method: paymentState.method, usd, bs }];
+                setPaymentState({...paymentState, payments: newPays, totalPaidUsd: newPays.reduce((s, p) => s + p.usd, 0), amount: 0});
+             }}>➕ REGISTRAR PAGO</button>
 
-             <div className="win-window p-4 bg-gray-300 space-y-2 border-2 border-gray-400">
-                <div className="flex justify-between text-xs font-bold text-gray-600">
-                  <span>ABONADO:</span> 
-                  <span>${paymentState.totalPaidUsd.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-lg font-black border-t border-gray-400 pt-2">
+             <div className="win-window p-3 bg-gray-300 space-y-2 border-2 border-gray-400">
+                <div className="flex justify-between text-lg font-black pt-2">
                   <span>FALTANTE:</span> 
                   <span className={cart.reduce((s, i) => s + (i.precioUsd * i.cantidad * (1 + i.iva/100)), 0) - paymentState.totalPaidUsd > 0 ? "text-red-600" : "text-green-600"}>
                     ${Math.max(0, cart.reduce((s, i) => s + (i.precioUsd * i.cantidad * (1 + i.iva/100)), 0) - paymentState.totalPaidUsd).toFixed(2)}
                   </span>
                 </div>
-                {paymentState.totalPaidUsd > cart.reduce((s, i) => s + (i.precioUsd * i.cantidad * (1 + i.iva/100)), 0) && (
-                  <div className="flex justify-between text-sm font-bold text-blue-700 bg-blue-100 p-1 rounded">
-                    <span>VUELTO:</span> 
-                    <span>${(paymentState.totalPaidUsd - cart.reduce((s, i) => s + (i.precioUsd * i.cantidad * (1 + i.iva/100)), 0)).toFixed(2)}</span>
-                  </div>
-                )}
-             </div>
-
-             <div className="max-h-24 overflow-y-auto space-y-1">
-                {paymentState.payments.map((p, i) => (
-                  <div key={i} className="flex justify-between text-[10px] bg-white p-1 border">
-                    <span className="font-bold">{p.method}</span>
-                    <span>{p.method.includes('USD') || p.method === 'Zelle' ? `$${p.usd.toFixed(2)}` : `Bs. ${p.bs.toFixed(2)}`}</span>
-                  </div>
-                ))}
              </div>
           </div>
           <div className="modal-footer">
             <button className="btn" onClick={onClose}>Volver</button>
             <button 
               className="btn btn-success font-black text-lg px-8 py-2" 
-              disabled={paymentState.totalPaidUsd < cart.reduce((s, i) => s + (i.precioUsd * i.cantidad * (1 + i.iva/100)), 0) * 0.99} // Margen de error 1%
+              disabled={paymentState.totalPaidUsd < cart.reduce((s, i) => s + (i.precioUsd * i.cantidad * (1 + i.iva/100)), 0) * 0.99}
               onClick={finalizeSale}
             >
               💾 FINALIZAR VENTA
             </button>
           </div>
+        </div>
+      )}
+
+      {/* MODAL NUEVO USUARIO */}
+      {activeModal === 'modalNuevoUsuario' && (
+        <div className="modal-window" style={{ width: '400px' }} onClick={e => e.stopPropagation()}>
+          <div className="modal-titlebar">
+            <span className="flex items-center gap-2"><UserPlus size={16}/> CREAR NUEVO OPERADOR</span>
+            <span className="modal-close" onClick={onClose}>✕</span>
+          </div>
+          <form onSubmit={handleCreateUser}>
+            <div className="modal-body space-y-4">
+              <div className="form-group">
+                <label>Nombre Completo:</label>
+                <input type="text" required value={userForm.name} onChange={e => setUserForm({...userForm, name: e.target.value})} className="win-input" />
+              </div>
+              <div className="form-group">
+                <label>Email / Correo:</label>
+                <input type="email" required value={userForm.email} onChange={e => setUserForm({...userForm, email: e.target.value})} className="win-input" />
+              </div>
+              <div className="form-group">
+                <label>Clave Acceso:</label>
+                <input type="password" required value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} className="win-input" />
+              </div>
+              <div className="form-group">
+                <label>Rol:</label>
+                <select className="win-input" value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})}>
+                  <option value="Administrador">Administrador</option>
+                  <option value="Supervisor">Supervisor</option>
+                  <option value="Cajero">Cajero</option>
+                </select>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn btn-primary font-bold">💾 CREAR ACCESO</button>
+            </div>
+          </form>
         </div>
       )}
 
@@ -344,56 +466,22 @@ export function Modals({
             <div className="text-center mb-4">
               <h2 className="text-sm font-black uppercase leading-none">{config.nombreEmpresa}</h2>
               <p className="text-[8px] mt-1">{config.rifEmpresa}</p>
-              <p className="text-[8px]">{config.direccion}</p>
             </div>
-            
-            <div className="border-y-2 border-black border-dashed py-2 mb-2">
-              <div className="flex justify-between"><span>FACTURA:</span> <span>{lastSale.numero}</span></div>
-              <div className="flex justify-between"><span>FECHA:</span> <span>{new Date(lastSale.fecha).toLocaleDateString()}</span></div>
-              <div className="flex justify-between"><span>HORA:</span> <span>{new Date(lastSale.fecha).toLocaleTimeString()}</span></div>
-              <div className="flex justify-between"><span>CAJERO:</span> <span>{lastSale.vendedor}</span></div>
-            </div>
-
+            <div className="border-y-2 border-black border-dashed py-2 mb-2 text-center font-bold">FACTURA: {lastSale.numero}</div>
             <table className="w-full mb-4">
-              <thead>
-                <tr className="border-b border-black">
-                  <th className="text-left">DESCRIPCIÓN</th>
-                  <th className="text-right">CANT</th>
-                  <th className="text-right">TOTAL</th>
-                </tr>
-              </thead>
               <tbody>
                 {lastSale.items.map((item, i) => (
                   <tr key={i}>
-                    <td className="py-1">{item.descripcion.slice(0, 15)}</td>
-                    <td className="text-right">x{item.cantidad}</td>
+                    <td>{item.descripcion} x{item.cantidad}</td>
                     <td className="text-right">${(item.precioUsd * item.cantidad * (1 + item.iva/100)).toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-
-            <div className="border-t-2 border-black pt-2 space-y-1">
-              <div className="flex justify-between"><span>SUBTOTAL:</span> <span>${lastSale.subtotal.toFixed(2)}</span></div>
-              <div className="flex justify-between"><span>IVA REC.:</span> <span>${lastSale.iva.toFixed(2)}</span></div>
-              <div className="flex justify-between text-sm font-black"><span>TOTAL USD:</span> <span>${lastSale.totalUsd.toFixed(2)}</span></div>
-              <div className="flex justify-between font-bold"><span>TOTAL BS:</span> <span>{lastSale.totalBs.toLocaleString('es-VE', {minimumFractionDigits:2})}</span></div>
+            <div className="border-t-2 border-black pt-2 space-y-1 font-bold">
+              <div className="flex justify-between"><span>TOTAL USD:</span> <span>${lastSale.totalUsd.toFixed(2)}</span></div>
+              <div className="flex justify-between"><span>TOTAL BS:</span> <span>{lastSale.totalBs.toFixed(2)}</span></div>
             </div>
-
-            <div className="mt-4 border-t border-black border-dotted pt-2">
-              <div className="text-[8px] font-bold">PAGOS:</div>
-              {lastSale.detallesPago?.map((p, i) => (
-                <div key={i} className="flex justify-between text-[8px]">
-                  <span>{p.method}:</span> 
-                  <span>{p.method.includes('USD') || p.method === 'Zelle' ? `$${p.usd.toFixed(2)}` : `Bs. ${p.bs.toFixed(2)}`}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="text-center mt-8 text-[8px] font-bold">
-              GRACIAS POR SU COMPRA<br/>SIN DERECHO A CRÉDITO FISCAL
-            </div>
-
             <div className="mt-6 flex flex-col gap-2 no-print">
               <button className="btn btn-primary w-full py-2 font-bold" onClick={() => window.print()}>🖨️ IMPRIMIR</button>
               <button className="btn w-full py-2" onClick={() => setLastSale(null)}>CERRAR</button>
