@@ -8,7 +8,7 @@ import {
   Wallet, Search, Trash2, Save, CreditCard, UserPlus, 
   Shield, Mail, Key, Package, UserCircle, Truck, 
   RefreshCcw, AlertCircle, TrendingUp, DollarSign,
-  PlusCircle, MinusCircle, FileText, UserCheck, Plus
+  PlusCircle, MinusCircle, FileText, UserCheck, Plus, Minus
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, setDoc, writeBatch, deleteDoc, updateDoc, increment } from 'firebase/firestore';
@@ -47,7 +47,7 @@ export function Modals({
   activeModal, onClose, products, setProducts, clients, setClients, 
   providers, setProviders, sales, setSales, accounts, setAccounts, 
   cart, setCart, config, setConfig, notify, editingId, users, setUsers,
-  movements, setMovements
+  movements, setMovements, onOpenModal
 }: ModalsProps) {
   
   const methodRef = useRef<HTMLSelectElement>(null);
@@ -55,9 +55,10 @@ export function Modals({
 
   // Form states
   const [productForm, setProductForm] = useState<Product | any>({
-    codigo: '', nombre: '', categoria: 'REPUESTOS', marca: 'GENERICO', 
-    costoPromedio: 0, utilidadPorcentaje: 30, precio1: 0, precio2: 0, precio3: 0, precio4: 0,
-    stock: 0, stockMin: 5, iva: 16, activo: true, isService: false
+    codigo: '', nombre: '', categoria: 'Accesorio', marca: 'Toyota', 
+    barcode: '', referencia: '', unidad: 'Unidad', departamento: 'Tienda',
+    costoPromedio: 0, utilidadPorcentaje: 22.22, precio1: 9, precio2: 0, precio3: 0, precio4: 0,
+    stock: 0, stockMin: 5, iva: 16, activo: true, isService: false, isKit: false, ubicacion: ''
   });
 
   const [clientForm, setClientForm] = useState<Client | any>({
@@ -68,7 +69,7 @@ export function Modals({
     id: '', rif: '', nombre: '', direccion: '', contacto: '', telefono: ''
   });
 
-  // Estado para Entrada por Compra (Recepción) idéntico a la imagen
+  // Estado para Entrada por Compra (Recepción)
   const [entradaHeader, setEntradaHeader] = useState({
     proveedor: '',
     nroFactura: '00021',
@@ -334,120 +335,160 @@ export function Modals({
   return (
     <div className="modal-overlay active" onClick={() => { if(!lastSale) onClose(); else setLastSale(null); }}>
       
-      {/* MODAL FICHA MAESTRA PRODUCTO */}
+      {/* MODAL FICHA MAESTRA PRODUCTO - IDENTICO A LA IMAGEN */}
       {activeModal === 'modalProducto' && (
-        <div className="modal-window xlarge" onClick={e => e.stopPropagation()}>
-          <div className="modal-titlebar">
-            <span className="flex items-center gap-2"><Package size={16}/> FICHA MAESTRA DE ITEM</span>
+        <div className="modal-window xlarge" onClick={e => e.stopPropagation()} style={{ width: '850px' }}>
+          <div className="win-titlebar">
+            <span className="flex items-center gap-2"><Package size={14}/> FICHA MAESTRA DE PRODUCTO</span>
             <span className="modal-close" onClick={onClose}>✕</span>
           </div>
           <form onSubmit={handleSaveProduct}>
-            <div className="modal-body">
-              <div className="grid grid-cols-3 gap-6">
-                <div className="col-span-1 space-y-4">
-                  <div className="win-window p-4 bg-gray-300">
-                    <div className="form-group">
-                      <label>Código Interno:</label>
-                      <input type="text" required value={productForm.codigo} onChange={e => setProductForm({...productForm, codigo: e.target.value.toUpperCase()})} className="win-input font-bold" disabled={editingId !== null} />
-                    </div>
-                  </div>
-                  <div className="form-group">
-                    <label>Tipo de Item:</label>
-                    <select className="win-input" value={productForm.isService ? 'true' : 'false'} onChange={e => setProductForm({...productForm, isService: e.target.value === 'true'})}>
-                      <option value="false">📦 Producto Físico</option>
-                      <option value="true">🛠️ Servicio / Mano de Obra</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Marca:</label>
-                    <input type="text" value={productForm.marca} onChange={e => setProductForm({...productForm, marca: e.target.value})} className="win-input" />
-                  </div>
-                  <div className="form-group">
-                    <label>Categoría:</label>
-                    <select className="win-input" value={productForm.categoria} onChange={e => setProductForm({...productForm, categoria: e.target.value})}>
-                      <option value="REPUESTOS">REPUESTOS</option>
-                      <option value="LUBRICANTES">LUBRICANTES</option>
-                      <option value="ACCESORIOS">ACCESORIOS</option>
-                      <option value="SERVICIOS">SERVICIOS</option>
-                    </select>
-                  </div>
+            <div className="modal-body" style={{ padding: '15px' }}>
+              <div className="grid grid-cols-3 gap-6 mb-6">
+                {/* Columna 1 */}
+                <div className="win-window p-4" style={{ background: '#c0c0c0', border: '1px solid #808080' }}>
+                   <div className="form-group mb-4">
+                      <label className="font-bold">Código de Barras:</label>
+                      <div className="flex gap-2">
+                        <input type="text" value={productForm.barcode} onChange={e => setProductForm({...productForm, barcode: e.target.value})} className="win-input flex-1" />
+                        <button type="button" className="btn px-2"><Search size={14}/></button>
+                      </div>
+                   </div>
+                   <div className="form-group mb-4">
+                      <label className="font-bold">Nombre del Producto:</label>
+                      <input type="text" required value={productForm.nombre} onChange={e => setProductForm({...productForm, nombre: e.target.value})} className="win-input" />
+                   </div>
+                   <div className="form-group">
+                      <label className="font-bold">Referencia / OEM:</label>
+                      <input type="text" value={productForm.referencia} onChange={e => setProductForm({...productForm, referencia: e.target.value})} className="win-input" />
+                   </div>
                 </div>
 
-                <div className="col-span-2 space-y-4">
-                  <div className="form-group">
-                    <label>Nombre / Descripción del Artículo:</label>
-                    <input type="text" required value={productForm.nombre} onChange={e => setProductForm({...productForm, nombre: e.target.value})} className="win-input font-bold" />
-                  </div>
-                  
-                  <div className="settings-section">
-                    <h3>💰 Costos y Precios (USD)</h3>
-                    <div className="grid grid-cols-4 gap-4">
-                      <div className="form-group">
-                        <label>Costo Prom.:</label>
-                        <input type="number" step="0.01" value={productForm.costoPromedio} onChange={e => {
-                          const costo = parseFloat(e.target.value) || 0;
-                          setProductForm({...productForm, costoPromedio: costo, precio1: Math.round(costo * (1 + productForm.utilidadPorcentaje/100) * 100)/100});
-                        }} className="win-input" />
-                      </div>
-                      <div className="form-group">
-                        <label>Utilidad %:</label>
-                        <input type="number" value={productForm.utilidadPorcentaje} onChange={e => {
-                          const util = parseFloat(e.target.value) || 0;
-                          setProductForm({...productForm, utilidadPorcentaje: util, precio1: Math.round(productForm.costoPromedio * (1 + util/100) * 100)/100});
-                        }} className="win-input" />
-                      </div>
-                      <div className="form-group">
-                        <label>IVA %:</label>
-                        <input type="number" value={productForm.iva} onChange={e => setProductForm({...productForm, iva: parseFloat(e.target.value) || 0})} className="win-input" />
-                      </div>
-                      <div className="form-group">
-                        <label>Activo:</label>
-                        <select className="win-input" value={productForm.activo ? 'true' : 'false'} onChange={e => setProductForm({...productForm, activo: e.target.value === 'true'})}>
-                          <option value="true">SÍ</option>
-                          <option value="false">NO</option>
+                {/* Columna 2 */}
+                <div className="win-window p-4" style={{ background: '#c0c0c0', border: '1px solid #808080' }}>
+                   <div className="form-group mb-4">
+                      <label className="font-bold">Marca:</label>
+                      <div className="flex gap-1">
+                        <select className="win-input flex-1" value={productForm.marca} onChange={e => setProductForm({...productForm, marca: e.target.value})}>
+                          <option value="Toyota">Toyota</option>
+                          <option value="Mazda">Mazda</option>
+                          <option value="Ford">Ford</option>
                         </select>
+                        <button type="button" className="btn px-2"><Plus size={10}/></button>
+                        <button type="button" className="btn px-2"><Minus size={10}/></button>
                       </div>
-                    </div>
-                    <div className="grid grid-cols-4 gap-4 mt-2">
-                      <div className="form-group">
-                        <label>Precio 1:</label>
-                        <input type="number" step="0.01" value={productForm.precio1} onChange={e => setProductForm({...productForm, precio1: parseFloat(e.target.value) || 0})} className="win-input font-bold text-blue-800" />
+                   </div>
+                   <div className="form-group mb-4">
+                      <label className="font-bold">Unidad de Medida:</label>
+                      <div className="flex gap-1">
+                        <select className="win-input flex-1" value={productForm.unidad} onChange={e => setProductForm({...productForm, unidad: e.target.value})}>
+                          <option value="Unidad">Unidad</option>
+                          <option value="Litro">Litro</option>
+                          <option value="Caja">Caja</option>
+                        </select>
+                        <button type="button" className="btn px-2"><Plus size={10}/></button>
                       </div>
-                      <div className="form-group">
-                        <label>Precio 2:</label>
-                        <input type="number" step="0.01" value={productForm.precio2} onChange={e => setProductForm({...productForm, precio2: parseFloat(e.target.value) || 0})} className="win-input" />
+                   </div>
+                   <div className="form-group mb-4">
+                      <label className="font-bold">Categoría:</label>
+                      <div className="flex gap-1">
+                        <select className="win-input flex-1" value={productForm.categoria} onChange={e => setProductForm({...productForm, categoria: e.target.value})}>
+                          <option value="Accesorio">Accesorio</option>
+                          <option value="Lubricante">Lubricante</option>
+                        </select>
+                        <button type="button" className="btn px-2"><Plus size={10}/></button>
                       </div>
-                      <div className="form-group">
-                        <label>Precio 3:</label>
-                        <input type="number" step="0.01" value={productForm.precio3} onChange={e => setProductForm({...productForm, precio3: parseFloat(e.target.value) || 0})} className="win-input" />
-                      </div>
-                      <div className="form-group">
-                        <label>Precio 4:</label>
-                        <input type="number" step="0.01" value={productForm.precio4} onChange={e => setProductForm({...productForm, precio4: parseFloat(e.target.value) || 0})} className="win-input" />
-                      </div>
-                    </div>
-                  </div>
+                   </div>
+                   <div className="form-group">
+                      <label className="font-bold">Departamento:</label>
+                      <select className="win-input" value={productForm.departamento} onChange={e => setProductForm({...productForm, departamento: e.target.value})}>
+                        <option value="Tienda">Tienda</option>
+                        <option value="Taller">Taller</option>
+                      </select>
+                   </div>
+                </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="win-window p-3 bg-blue-100">
-                      <div className="form-group">
-                        <label>Stock Actual:</label>
-                        <input type="number" value={productForm.stock} onChange={e => setProductForm({...productForm, stock: parseFloat(e.target.value) || 0})} className="win-input font-bold" disabled={editingId !== null} />
-                      </div>
-                    </div>
-                    <div className="win-window p-3 bg-red-100">
-                      <div className="form-group">
-                        <label>Stock Mínimo:</label>
-                        <input type="number" value={productForm.stockMin} onChange={e => setProductForm({...productForm, stockMin: parseFloat(e.target.value) || 0})} className="win-input" />
-                      </div>
-                    </div>
-                  </div>
+                {/* Columna 3 */}
+                <div className="win-window p-4" style={{ background: '#c0c0c0', border: '1px solid #808080' }}>
+                   <div className="form-group mb-4">
+                      <label className="font-bold">Ganancia Markup (%):</label>
+                      <input 
+                        type="number" 
+                        value={productForm.utilidadPorcentaje} 
+                        onChange={e => setProductForm({...productForm, utilidadPorcentaje: parseFloat(e.target.value) || 0})} 
+                        className="win-input text-blue-600 font-bold" 
+                      />
+                   </div>
+                   <div className="form-group mb-4">
+                      <label className="font-bold">IVA / Impuestos:</label>
+                      <select className="win-input" value={productForm.iva} onChange={e => setProductForm({...productForm, iva: parseInt(e.target.value)})}>
+                        <option value="16">General (16%)</option>
+                        <option value="0">Exento (0%)</option>
+                      </select>
+                   </div>
+                   <div className="form-group mb-4">
+                      <label className="font-bold">Precio Detal (USD):</label>
+                      <input 
+                        type="number" 
+                        step="0.01"
+                        value={productForm.precio1} 
+                        onChange={e => setProductForm({...productForm, precio1: parseFloat(e.target.value) || 0})} 
+                        className="win-input font-bold"
+                        style={{ backgroundColor: '#ffffcc' }}
+                      />
+                   </div>
+                   <div className="form-group">
+                      <label className="font-bold">Precio Detal (Bs.):</label>
+                      <input 
+                        type="text" 
+                        value={(productForm.precio1 * config.tasa).toFixed(2)} 
+                        readOnly 
+                        className="win-input bg-gray-100 font-bold" 
+                      />
+                   </div>
                 </div>
               </div>
+
+              <div className="grid grid-cols-2 gap-6">
+                 {/* Stock y Tipo */}
+                 <div className="win-window p-6" style={{ background: '#c0c0c0', border: '1px solid #808080' }}>
+                    <h4 className="text-blue-800 font-bold mb-4 uppercase text-xs">STOCK Y TIPO</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                       <div className="form-group">
+                          <label className="font-bold">Stock Mínimo:</label>
+                          <input type="number" value={productForm.stockMin} onChange={e => setProductForm({...productForm, stockMin: parseInt(e.target.value) || 0})} className="win-input" />
+                       </div>
+                       <div className="form-group">
+                          <label className="font-bold">Stock Inicial:</label>
+                          <input 
+                            type="number" 
+                            value={productForm.stock} 
+                            onChange={e => setProductForm({...productForm, stock: parseInt(e.target.value) || 0})} 
+                            className="win-input" 
+                            style={{ backgroundColor: '#ffffcc' }}
+                          />
+                       </div>
+                    </div>
+                    <div className="form-group mt-4">
+                       <label className="font-bold">Ubicación Física:</label>
+                       <input type="text" value={productForm.ubicacion} onChange={e => setProductForm({...productForm, ubicacion: e.target.value})} className="win-input" />
+                    </div>
+                 </div>
+
+                 {/* Checkbox Kit */}
+                 <div className="flex items-center justify-center">
+                    <label className="flex items-center gap-3 font-bold cursor-pointer">
+                       <input type="checkbox" checked={productForm.isKit} onChange={e => setProductForm({...productForm, isKit: e.target.checked})} className="size-5" />
+                       Es Kit / Combo
+                    </label>
+                 </div>
+              </div>
             </div>
-            <div className="modal-footer">
-              <button type="button" className="btn" onClick={onClose}>Cancelar</button>
-              <button type="submit" className="btn btn-primary font-bold">💾 GUARDAR PRODUCTO</button>
+            <div className="modal-footer" style={{ padding: '15px', gap: '10px' }}>
+              <button type="button" className="btn px-8" onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn btn-primary px-8 font-bold flex items-center gap-2">
+                <Save size={14}/> GUARDAR FICHA
+              </button>
             </div>
           </form>
         </div>
@@ -456,8 +497,8 @@ export function Modals({
       {/* MODAL CLIENTE */}
       {activeModal === 'modalCliente' && (
         <div className="modal-window" style={{ width: '450px' }} onClick={e => e.stopPropagation()}>
-          <div className="modal-titlebar">
-            <span className="flex items-center gap-2"><UserCircle size={16}/> DATOS DEL CLIENTE</span>
+          <div className="win-titlebar">
+            <span className="flex items-center gap-2"><UserCircle size={14}/> DATOS DEL CLIENTE</span>
             <span className="modal-close" onClick={onClose}>✕</span>
           </div>
           <form onSubmit={handleSaveClient}>
@@ -515,8 +556,8 @@ export function Modals({
       {/* MODAL PROVEEDOR */}
       {activeModal === 'modalProveedor' && (
         <div className="modal-window" style={{ width: '450px' }} onClick={e => e.stopPropagation()}>
-          <div className="modal-titlebar">
-            <span className="flex items-center gap-2"><Truck size={16}/> FICHA DE PROVEEDOR</span>
+          <div className="win-titlebar">
+            <span className="flex items-center gap-2"><Truck size={14}/> FICHA DE PROVEEDOR</span>
             <span className="modal-close" onClick={onClose}>✕</span>
           </div>
           <form onSubmit={handleSaveProvider}>
@@ -552,11 +593,11 @@ export function Modals({
         </div>
       )}
 
-      {/* MODAL ENTRADA POR COMPRA (RECEPCIÓN) - RESTAURADO IDÉNTICO A LA IMAGEN */}
+      {/* MODAL ENTRADA POR COMPRA (RECEPCIÓN) */}
       {activeModal === 'modalEntrada' && (
         <div className="modal-window xlarge" onClick={e => e.stopPropagation()}>
-          <div className="modal-titlebar">
-            <span className="flex items-center gap-2"><PlusCircle size={16}/> ENTRADA POR COMPRA (RECEPCIÓN)</span>
+          <div className="win-titlebar">
+            <span className="flex items-center gap-2"><PlusCircle size={14}/> ENTRADA POR COMPRA (RECEPCIÓN)</span>
             <span className="modal-close" onClick={onClose}>✕</span>
           </div>
           <div className="modal-body" style={{ padding: '15px' }}>
@@ -634,7 +675,7 @@ export function Modals({
              </div>
 
              <div className="toolbar bg-gray-300 p-3 flex gap-3 mb-4 items-center border border-gray-500">
-                <button className="btn flex items-center gap-2" onClick={() => onOpenModal('modalProducto')}><Plus size={14}/> NUEVA FICHA</button>
+                <button type="button" className="btn flex items-center gap-2" onClick={() => onOpenModal('modalProducto')}><Plus size={14}/> NUEVA FICHA</button>
                 <div className="relative flex-1">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2">🔍</span>
                   <input 
@@ -654,7 +695,7 @@ export function Modals({
                     </div>
                   )}
                 </div>
-                <button className="btn flex items-center gap-2"><Plus size={14}/> AÑADIR ITEM</button>
+                <button type="button" className="btn flex items-center gap-2"><Plus size={14}/> AÑADIR ITEM</button>
              </div>
 
              <div className="table-responsive" style={{ height: '300px', background: 'white', border: '2px solid #808080' }}>
@@ -698,7 +739,7 @@ export function Modals({
                           </td>
                           <td style={{ textAlign: 'right', fontWeight: 'bold' }}>${item.subtotal.toFixed(2)}</td>
                           <td style={{ textAlign: 'center' }}>
-                             <button onClick={() => setEntradaCart(entradaCart.filter((_, idx) => idx !== i))} className="text-red-600">🗑️</button>
+                             <button type="button" onClick={() => setEntradaCart(entradaCart.filter((_, idx) => idx !== i))} className="text-red-600">🗑️</button>
                           </td>
                         </tr>
                       ))}
@@ -710,8 +751,9 @@ export function Modals({
              </div>
           </div>
           <div className="modal-footer" style={{ padding: '15px' }}>
-            <button className="btn" style={{ padding: '8px 25px' }} onClick={onClose}>Cancelar</button>
+            <button type="button" className="btn" style={{ padding: '8px 25px' }} onClick={onClose}>Cancelar</button>
             <button 
+              type="button"
               className="btn font-bold flex items-center gap-2" 
               style={{ background: '#f5f5ff', border: '2px solid #5c5ce0', padding: '8px 25px' }}
               onClick={handleProcesarEntrada}
@@ -725,8 +767,8 @@ export function Modals({
       {/* MODAL AJUSTE INVENTARIO */}
       {activeModal === 'modalAjuste' && (
         <div className="modal-window" style={{ width: '400px' }} onClick={e => e.stopPropagation()}>
-          <div className="modal-titlebar">
-            <span className="flex items-center gap-2"><RefreshCcw size={16}/> AJUSTE DE INVENTARIO</span>
+          <div className="win-titlebar">
+            <span className="flex items-center gap-2"><RefreshCcw size={14}/> AJUSTE DE INVENTARIO</span>
             <span className="modal-close" onClick={onClose}>✕</span>
           </div>
           <div className="modal-body space-y-4">
@@ -785,8 +827,9 @@ export function Modals({
             </div>
           </div>
           <div className="modal-footer">
-            <button className="btn" onClick={onClose}>Cancelar</button>
+            <button type="button" className="btn" onClick={onClose}>Cancelar</button>
             <button 
+              type="button"
               className="btn font-bold btn-primary"
               onClick={() => handleInventoryOperation('AJUSTE')}
             >
@@ -799,8 +842,8 @@ export function Modals({
       {/* MODAL COBRO POS (PROCESAR) */}
       {activeModal === 'modalProcesar' && (
         <div className="modal-window" style={{ width: '420px' }} onClick={e => e.stopPropagation()}>
-          <div className="modal-titlebar">
-            <span className="flex items-center gap-2"><CreditCard size={16}/> PROCESAR COBRO</span>
+          <div className="win-titlebar">
+            <span className="flex items-center gap-2"><CreditCard size={14}/> PROCESAR COBRO</span>
             <span className="modal-close" onClick={onClose}>✕</span>
           </div>
           <div className="modal-body space-y-4">
@@ -834,7 +877,7 @@ export function Modals({
                </div>
              </div>
 
-             <button className="btn btn-primary w-full py-2 font-bold" onClick={() => {
+             <button type="button" className="btn btn-primary w-full py-2 font-bold" onClick={() => {
                 if (!paymentState.amount) return;
                 const usd = paymentState.method.includes('USD') || paymentState.method === 'Zelle' ? paymentState.amount : paymentState.amount / config.tasa;
                 const bs = paymentState.method.includes('Bs.') || paymentState.method === 'Pagomovil' || paymentState.method === 'Punto de Venta' ? paymentState.amount : paymentState.amount * config.tasa;
@@ -852,8 +895,9 @@ export function Modals({
              </div>
           </div>
           <div className="modal-footer">
-            <button className="btn" onClick={onClose}>Volver</button>
+            <button type="button" className="btn" onClick={onClose}>Volver</button>
             <button 
+              type="button"
               className="btn btn-success font-black text-lg px-8 py-2" 
               disabled={paymentState.totalPaidUsd < cart.reduce((s, i) => s + (i.precioUsd * i.cantidad * (1 + i.iva/100)), 0) * 0.99}
               onClick={finalizeSale}
@@ -867,8 +911,8 @@ export function Modals({
       {/* MODAL NUEVO USUARIO */}
       {activeModal === 'modalNuevoUsuario' && (
         <div className="modal-window" style={{ width: '400px' }} onClick={e => e.stopPropagation()}>
-          <div className="modal-titlebar">
-            <span className="flex items-center gap-2"><UserPlus size={16}/> CREAR NUEVO OPERADOR</span>
+          <div className="win-titlebar">
+            <span className="flex items-center gap-2"><UserPlus size={14}/> CREAR NUEVO OPERADOR</span>
             <span className="modal-close" onClick={onClose}>✕</span>
           </div>
           <form onSubmit={handleCreateUser}>
@@ -926,8 +970,8 @@ export function Modals({
               <div className="flex justify-between"><span>TOTAL BS:</span> <span>{lastSale.totalBs.toFixed(2)}</span></div>
             </div>
             <div className="mt-6 flex flex-col gap-2 no-print">
-              <button className="btn btn-primary w-full py-2 font-bold" onClick={() => window.print()}>🖨️ IMPRIMIR</button>
-              <button className="btn w-full py-2" onClick={() => setLastSale(null)}>CERRAR</button>
+              <button type="button" className="btn btn-primary w-full py-2 font-bold" onClick={() => window.print()}>🖨️ IMPRIMIR</button>
+              <button type="button" className="btn w-full py-2" onClick={() => setLastSale(null)}>CERRAR</button>
             </div>
           </div>
         </div>
