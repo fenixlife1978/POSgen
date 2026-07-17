@@ -7,7 +7,7 @@ import {
   Wallet, Search, Trash2, Save, CreditCard, UserPlus, 
   Shield, Mail, Key, Package, UserCircle, Truck, 
   RefreshCcw, AlertCircle, TrendingUp, DollarSign,
-  PlusCircle, MinusCircle, FileText, UserCheck, Plus, Minus, Layers
+  PlusCircle, MinusCircle, FileText, UserCheck, Plus, Minus, Layers, Wrench
 } from 'lucide-react';
 import { db, auth } from '@/lib/firebase';
 import { doc, setDoc, writeBatch, deleteDoc, updateDoc, increment } from 'firebase/firestore';
@@ -57,7 +57,7 @@ export function Modals({
     barcode: '', referencia: '', unidad: 'Unidad', departamento: 'Tienda',
     costoPromedio: '0', utilidadPorcentaje: '0', precio1: '0', precio2: '0', precio3: '0', precio4: '0',
     stock: '0', stockMin: '5', iva: 16, exento: false, activo: true, isService: false, isKit: false, stockPropio: true,
-    kitComponents: [], ubicacion: ''
+    kitComponents: [], ubicacion: '', serviceType: 'Mecánica General'
   });
 
   const [kitSearch, setKitSearch] = useState('');
@@ -97,7 +97,9 @@ export function Modals({
           precio3: p.precio3?.toString() || '0',
           precio4: p.precio4?.toString() || '0',
           stock: p.stock?.toString() || '0',
-          stockMin: p.stockMin?.toString() || '0'
+          stockMin: p.stockMin?.toString() || '0',
+          isService: p.isService || false,
+          serviceType: p.serviceType || 'Mecánica General'
         });
       }
     } else if (activeModal === 'modalProducto' && editingId === null) {
@@ -106,7 +108,7 @@ export function Modals({
         barcode: '', referencia: '', unidad: 'Unidad', departamento: 'Tienda',
         costoPromedio: '0', utilidadPorcentaje: '0', precio1: '0', precio2: '0', precio3: '0', precio4: '0',
         stock: '0', stockMin: '5', iva: 16, exento: false, activo: true, isService: false, isKit: false, stockPropio: true,
-        kitComponents: [], ubicacion: ''
+        kitComponents: [], ubicacion: '', serviceType: 'Mecánica General'
       });
     } else if (activeModal === 'modalCliente' && editingId !== null) {
       setClientForm(clients[editingId]);
@@ -142,19 +144,21 @@ export function Modals({
       const effectiveNum = isNaN(numValue) ? 0 : numValue;
       const effectiveCost = isNaN(costNum) ? 0 : costNum;
 
-      if (type === 'cost') {
+      if (type === 'cost' || type === 'margin' || type === 'usd' || type === 'bs') {
         const marginNum = parseFloat(newForm.utilidadPorcentaje) / 100;
-        const p1 = marginNum < 1 ? effectiveNum / (1 - marginNum) : effectiveNum;
-        newForm.precio1 = p1.toFixed(4);
-      } else if (type === 'margin') {
-        const marginNum = effectiveNum / 100;
-        const p1 = marginNum < 1 ? effectiveCost / (1 - marginNum) : effectiveCost;
-        newForm.precio1 = p1.toFixed(4);
-      } else if (type === 'usd') {
-        newForm.utilidadPorcentaje = effectiveNum > 0 ? ((1 - (effectiveCost / effectiveNum)) * 100).toFixed(2) : "0";
-      } else if (type === 'bs') {
-        const usdVal = effectiveNum / tasa;
-        newForm.utilidadPorcentaje = usdVal > 0 ? ((1 - (effectiveCost / usdVal)) * 100).toFixed(2) : "0";
+        
+        if (type === 'cost') {
+          const p1 = marginNum < 1 ? effectiveNum / (1 - marginNum) : effectiveNum;
+          newForm.precio1 = p1.toFixed(4);
+        } else if (type === 'margin') {
+          const p1 = effectiveNum < 100 ? effectiveCost / (1 - effectiveNum / 100) : effectiveCost;
+          newForm.precio1 = p1.toFixed(4);
+        } else if (type === 'usd') {
+          newForm.utilidadPorcentaje = effectiveNum > 0 ? ((1 - (effectiveCost / effectiveNum)) * 100).toFixed(2) : "0";
+        } else if (type === 'bs') {
+          const usdVal = effectiveNum / tasa;
+          newForm.utilidadPorcentaje = usdVal > 0 ? ((1 - (effectiveCost / usdVal)) * 100).toFixed(2) : "0";
+        }
       }
     }
 
@@ -194,14 +198,21 @@ export function Modals({
         stock: parseInt(productForm.stock) || 0,
         stockMin: parseInt(productForm.stockMin) || 0,
       };
+      
       if (finalProduct.isKit && !finalProduct.stockPropio) {
         finalProduct.stock = 0;
       }
+      
+      if (finalProduct.isService) {
+        finalProduct.stock = 0;
+        finalProduct.stockMin = 0;
+      }
+
       await setDoc(doc(db, 'products', finalProduct.codigo), finalProduct);
-      notify('✅ Producto guardado exitosamente');
+      notify('✅ Producto/Servicio guardado exitosamente');
       onClose();
     } catch (error) {
-      notify('❌ Error al guardar producto', 'error');
+      notify('❌ Error al guardar', 'error');
     }
   };
 
@@ -373,11 +384,36 @@ export function Modals({
       {activeModal === 'modalProducto' && (
         <div className="modal-window xlarge" onClick={e => e.stopPropagation()} style={{ width: '850px', maxHeight: '95vh', overflowY: 'auto' }}>
           <div className="win-titlebar">
-            <span className="flex items-center gap-2"><Package size={14}/> FICHA MAESTRA DE PRODUCTO</span>
+            <span className="flex items-center gap-2">
+              {productForm.isService ? <Wrench size={14}/> : <Package size={14}/>}
+              {productForm.isService ? ' FICHA MAESTRA DE SERVICIO' : ' FICHA MAESTRA DE PRODUCTO'}
+            </span>
             <span className="modal-close" onClick={onClose}></span>
           </div>
           <form onSubmit={handleSaveProduct}>
             <div className="modal-body p-6">
+              {/* HEADER DIFERENCIADOR */}
+              <div className="flex gap-4 mb-6 bg-gray-300 p-2 border border-gray-400">
+                <label className="flex items-center gap-3 font-black cursor-pointer px-4 h-10 bg-white border-2 border-primary/20 rounded">
+                  <input 
+                    type="radio" 
+                    checked={!productForm.isService} 
+                    onChange={() => setProductForm({...productForm, isService: false})} 
+                    className="size-5" 
+                  />
+                  ITEM FÍSICO / PRODUCTO
+                </label>
+                <label className="flex items-center gap-3 font-black cursor-pointer px-4 h-10 bg-white border-2 border-indigo-200 rounded">
+                  <input 
+                    type="radio" 
+                    checked={productForm.isService} 
+                    onChange={() => setProductForm({...productForm, isService: true})} 
+                    className="size-5" 
+                  />
+                  SERVICIO AUTOMOTRIZ
+                </label>
+              </div>
+
               <div className="grid grid-cols-3 gap-6 mb-6">
                 <div className="win-window p-4" style={{ background: '#c0c0c0', border: '1px solid #808080' }}>
                    <div className="form-group mb-4">
@@ -392,7 +428,7 @@ export function Modals({
                       </div>
                    </div>
                    <div className="form-group mb-4">
-                      <label className="font-bold">Nombre del Producto:</label>
+                      <label className="font-bold">Nombre del {productForm.isService ? 'Servicio' : 'Producto'}:</label>
                       <input type="text" required value={productForm.nombre} onChange={e => setProductForm({...productForm, nombre: e.target.value})} className="win-input" />
                    </div>
                    <div className="form-group">
@@ -403,12 +439,13 @@ export function Modals({
 
                 <div className="win-window p-4" style={{ background: '#c0c0c0', border: '1px solid #808080' }}>
                    <div className="form-group mb-4">
-                      <label className="font-bold">Marca:</label>
+                      <label className="font-bold">Marca / Especialidad:</label>
                       <div className="flex gap-1">
                         <select className="win-input flex-1" value={productForm.marca} onChange={e => setProductForm({...productForm, marca: e.target.value})}>
                           <option value="Toyota">Toyota</option>
                           <option value="Mazda">Mazda</option>
                           <option value="Ford">Ford</option>
+                          <option value="Multimarca">Multimarca</option>
                         </select>
                         <button type="button" className="btn px-2"><Plus size={10}/></button>
                         <button type="button" className="btn px-2"><Minus size={10}/></button>
@@ -419,19 +456,36 @@ export function Modals({
                       <div className="flex gap-1">
                         <select className="win-input flex-1" value={productForm.unidad} onChange={e => setProductForm({...productForm, unidad: e.target.value})}>
                           <option value="Unidad">Unidad</option>
+                          <option value="Servicio">Servicio</option>
+                          <option value="Hora">Hora</option>
                           <option value="Litro">Litro</option>
                         </select>
                         <button type="button" className="btn px-2"><Plus size={10}/></button>
                       </div>
                    </div>
                    <div className="form-group mb-4">
-                      <label className="font-bold">Categoría:</label>
+                      <label className="font-bold">{productForm.isService ? 'Tipo de Servicio:' : 'Categoría:'}</label>
                       <div className="flex gap-1">
-                        <select className="win-input flex-1" value={productForm.categoria} onChange={e => setProductForm({...productForm, categoria: e.target.value})}>
-                          <option value="Accesorio">Accesorio</option>
-                          <option value="Lubricante">Lubricante</option>
+                        <select className="win-input flex-1" value={productForm.isService ? productForm.serviceType : productForm.categoria} onChange={e => setProductForm({...productForm, [productForm.isService ? 'serviceType' : 'categoria']: e.target.value})}>
+                          {productForm.isService ? (
+                            <>
+                              <option value="Mecánica General">Mecánica General</option>
+                              <option value="Cambio de Aceite">Cambio de Aceite</option>
+                              <option value="Frenos">Frenos</option>
+                              <option value="Electricidad">Electricidad</option>
+                              <option value="Diagnóstico">Diagnóstico</option>
+                            </>
+                          ) : (
+                            <>
+                              <option value="Accesorio">Accesorio</option>
+                              <option value="Lubricante">Lubricante</option>
+                              <option value="Repuesto Motor">Repuesto Motor</option>
+                              <option value="Tren Delantero">Tren Delantero</option>
+                            </>
+                          )}
                         </select>
                         <button type="button" className="btn px-2"><Plus size={10}/></button>
+                        <button type="button" className="btn px-2"><Minus size={10}/></button>
                       </div>
                    </div>
                    <div className="form-group">
@@ -440,15 +494,17 @@ export function Modals({
                         <select className="win-input flex-1" value={productForm.departamento} onChange={e => setProductForm({...productForm, departamento: e.target.value})}>
                           <option value="Tienda">Tienda</option>
                           <option value="Taller">Taller</option>
+                          <option value="Servicios Externos">Servicios Externos</option>
                         </select>
                         <button type="button" className="btn px-2"><Plus size={10}/></button>
+                        <button type="button" className="btn px-2"><Minus size={10}/></button>
                       </div>
                    </div>
                 </div>
 
                 <div className="win-window p-4" style={{ background: '#c0c0c0', border: '1px solid #808080' }}>
                    <div className="form-group mb-4">
-                      <label className="font-bold text-red-800">Costo Actual (USD):</label>
+                      <label className="font-bold text-red-800">Costo USD:</label>
                       <input 
                         type="text" value={productForm.costoPromedio} 
                         onChange={e => handlePriceUpdate('cost', e.target.value)} 
@@ -484,20 +540,25 @@ export function Modals({
 
               <div className="grid grid-cols-2 gap-6">
                  <div className="win-window p-6" style={{ background: '#c0c0c0', border: '1px solid #808080' }}>
-                    <h4 className="text-blue-800 font-bold mb-4 uppercase text-xs">STOCK Y TIPO</h4>
+                    <h4 className="text-blue-800 font-bold mb-4 uppercase text-xs">CONTROL DE EXISTENCIA</h4>
                     <div className="grid grid-cols-2 gap-4">
                        <div className="form-group">
                           <label className="font-bold">Stock Mínimo:</label>
-                          <input type="text" value={productForm.stockMin} onChange={e => setProductForm({...productForm, stockMin: e.target.value})} className="win-input" />
+                          <input 
+                            type="text" value={productForm.stockMin} 
+                            disabled={productForm.isService}
+                            onChange={e => setProductForm({...productForm, stockMin: e.target.value})} 
+                            className={`win-input ${productForm.isService ? 'bg-gray-200' : ''}`} 
+                          />
                        </div>
                        <div className="form-group">
                           <label className="font-bold">Stock Inicial:</label>
                           <input 
-                            type="text" value={productForm.stock} 
-                            disabled={editingId !== null || (productForm.isKit && !productForm.stockPropio)}
+                            type="text" value={productForm.isService ? '0' : productForm.stock} 
+                            disabled={editingId !== null || (productForm.isKit && !productForm.stockPropio) || productForm.isService}
                             onChange={e => setProductForm({...productForm, stock: e.target.value})} 
-                            className={`win-input ${ (editingId !== null || (productForm.isKit && !productForm.stockPropio)) ? 'bg-gray-200' : ''}`}
-                            style={{ backgroundColor: (editingId !== null || (productForm.isKit && !productForm.stockPropio)) ? '' : '#ffffcc' }}
+                            className={`win-input ${ (editingId !== null || (productForm.isKit && !productForm.stockPropio) || productForm.isService) ? 'bg-gray-200' : ''}`}
+                            style={{ backgroundColor: (editingId !== null || (productForm.isKit && !productForm.stockPropio) || productForm.isService) ? '' : '#ffffcc' }}
                           />
                        </div>
                     </div>
@@ -518,25 +579,25 @@ export function Modals({
                        </div>
                     </div>
                     <div className="form-group mt-4">
-                       <label className="font-bold">Ubicación Física:</label>
+                       <label className="font-bold">Ubicación Física / Bahía:</label>
                        <input type="text" value={productForm.ubicacion} onChange={e => setProductForm({...productForm, ubicacion: e.target.value})} className="win-input" />
                     </div>
                  </div>
 
                  <div className="win-window p-6" style={{ background: '#c0c0c0', border: '1px solid #808080' }}>
-                    <h4 className="text-indigo-800 font-bold mb-4 uppercase text-xs">PRECIOS ALTERNATIVOS</h4>
+                    <h4 className="text-indigo-800 font-bold mb-4 uppercase text-xs">NIVELES DE PRECIO ADICIONALES</h4>
                     <div className="grid grid-cols-2 gap-4">
                        <div className="form-group">
-                          <label className="font-bold text-[10px]">PRECIO MAYOR:</label>
+                          <label className="font-bold text-[10px]">PRECIO MAYOR (USD):</label>
                           <input type="text" value={productForm.precio2} onChange={e => setProductForm({...productForm, precio2: e.target.value})} className="win-input" />
                        </div>
                        <div className="form-group">
-                          <label className="font-bold text-[10px]">PRECIO PROMOCIÓN:</label>
+                          <label className="font-bold text-[10px]">PRECIO PROMOCIÓN (USD):</label>
                           <input type="text" value={productForm.precio3} onChange={e => setProductForm({...productForm, precio3: e.target.value})} className="win-input" />
                        </div>
                     </div>
                     <div className="form-group mt-4">
-                       <label className="font-bold text-[10px] text-red-600">PRECIO DE COSTO (REFERENCIAL):</label>
+                       <label className="font-bold text-[10px] text-red-600">PRECIO DE COSTO REFERENCIAL:</label>
                        <input type="text" value={productForm.precio4} onChange={e => setProductForm({...productForm, precio4: e.target.value})} className="win-input" />
                     </div>
                  </div>
@@ -544,11 +605,17 @@ export function Modals({
 
               <div className="mt-6 flex flex-col gap-4">
                  <div className="flex items-center gap-4">
-                    <label className="flex items-center gap-3 font-bold cursor-pointer">
-                       <input type="checkbox" checked={productForm.isKit} onChange={e => setProductForm({...productForm, isKit: e.target.checked})} className="size-5" />
+                    <label className={`flex items-center gap-3 font-bold cursor-pointer ${productForm.isService ? 'opacity-30 pointer-events-none' : ''}`}>
+                       <input 
+                         type="checkbox" 
+                         checked={productForm.isKit} 
+                         disabled={productForm.isService}
+                         onChange={e => setProductForm({...productForm, isKit: e.target.checked})} 
+                         className="size-5" 
+                       />
                        Es Kit / Combo
                     </label>
-                    {productForm.isKit && (
+                    {productForm.isKit && !productForm.isService && (
                        <div className="flex items-center gap-4 animate-in slide-in-from-left-2">
                           <label className="flex items-center gap-2 text-xs font-bold">
                              <input type="radio" checked={productForm.stockPropio} onChange={() => setProductForm({...productForm, stockPropio: true})} /> Stock Propio
@@ -560,9 +627,9 @@ export function Modals({
                     )}
                  </div>
 
-                 {productForm.isKit && !productForm.stockPropio && (
+                 {productForm.isKit && !productForm.stockPropio && !productForm.isService && (
                     <div className="win-window p-6 animate-in fade-in" style={{ background: '#dce8f0', border: '2px dashed #808080' }}>
-                       <h4 className="font-black text-blue-900 mb-4 flex items-center gap-2"><Layers size={14}/> CONFIGURACIÓN DE COMPONENTES VIRTUALES</h4>
+                       <h4 className="font-black text-blue-900 mb-4 flex items-center gap-2"><Layers size={14}/> COMPONENTES DEL COMBO VIRTUAL</h4>
                        <div className="relative mb-4">
                           <input 
                              type="text" placeholder="🔍 Buscar productos para el combo..." 
@@ -853,7 +920,7 @@ export function Modals({
                  />
                  {entradaSearch && (
                    <div className="search-dropdown active w-full">
-                     {products.filter(p => p.codigo.toLowerCase().includes(entradaSearch.toLowerCase()) || p.nombre.toLowerCase().includes(entradaSearch.toLowerCase())).map(p => (
+                     {products.filter(p => !p.isService && (p.codigo.toLowerCase().includes(entradaSearch.toLowerCase()) || p.nombre.toLowerCase().includes(entradaSearch.toLowerCase()))).map(p => (
                        <div key={p.codigo} className="search-dropdown-item" onClick={() => {
                           setEntradaCart([...entradaCart, { codigo: p.codigo, descripcion: p.nombre, cantidad: 1, costo: p.costoPromedio }]);
                           setEntradaSearch('');
@@ -950,7 +1017,7 @@ export function Modals({
                 <label className="font-bold">Producto:</label>
                 <select className="win-input" value={inventoryForm.codigo} onChange={e => setInventoryForm({...inventoryForm, codigo: e.target.value})}>
                    <option value="">-- Seleccionar --</option>
-                   {products.map(p => <option key={p.codigo} value={p.codigo}>{p.codigo} - {p.nombre}</option>)}
+                   {products.filter(p => !p.isService).map(p => <option key={p.codigo} value={p.codigo}>{p.codigo} - {p.nombre}</option>)}
                 </select>
              </div>
              <div className="grid grid-cols-2 gap-4">
