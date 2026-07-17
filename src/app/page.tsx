@@ -24,6 +24,7 @@ export default function POSPage() {
   const [loginData, setLoginData] = useState({ email: '', password: '', role: 'Administrador' });
   const [activeModule, setActiveModule] = useState('pos');
   const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [modalStack, setModalStack] = useState<string[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   
   // App State
@@ -67,7 +68,6 @@ export default function POSPage() {
             setConfig(prev => ({ ...prev, vendedor: userData.name || user.email || 'OPERADOR' }));
             setIsLoggedIn(true);
           } else {
-            // Caso bootstrap: Si el usuario existe en Auth pero no en Firestore
             const fallbackAdmin = { 
               id: user.uid,
               email: user.email, 
@@ -129,7 +129,6 @@ export default function POSPage() {
         setMovements(snapshot.docs.map(doc => doc.data() as InventoryMovement));
       },
       (error) => {
-        // Capturamos el error de falta de índice para evitar crash de la app
         if (error.code === 'failed-precondition') {
           console.warn("Falta índice de grupo de colecciones para 'logs'. Por favor, usa el enlace en el mensaje de error de Firebase para crearlo.");
         } else {
@@ -151,11 +150,9 @@ export default function POSPage() {
     const password = loginData.password;
 
     try {
-      // 1. Intentar autenticar con Firebase Auth real
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // 2. Verificar perfil en Firestore
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       if (userDoc.exists()) {
         const userData = userDoc.data();
@@ -169,7 +166,6 @@ export default function POSPage() {
     } catch (error: any) {
       console.warn("Auth Error:", error.code);
       
-      // 3. PUENTE DE EMERGENCIA (Bypass para sistemas vacíos)
       if (email === 'admin@sistema.com' && password === '123' && loginData.role === 'Administrador') {
         notify('⚠️ MODO EMERGENCIA: Acceso concedido para inicialización.', 'warning');
         setCurrentUser({
@@ -183,7 +179,6 @@ export default function POSPage() {
         return;
       }
 
-      // Manejo de errores normales de Auth
       if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
         notify('Credenciales incorrectas o usuario inexistente.', 'error');
       } else {
@@ -208,12 +203,22 @@ export default function POSPage() {
   };
 
   const openModal = (id: string, dataId?: any) => {
+    if (activeModal && activeModal !== id) {
+      setModalStack(prev => [...prev, activeModal]);
+    }
     setEditingId(dataId || null);
     setActiveModal(id);
   };
+  
   const closeModal = () => {
-    setActiveModal(null);
-    setEditingId(null);
+    if (modalStack.length > 0) {
+      const prev = modalStack[modalStack.length - 1];
+      setModalStack(prevStack => prevStack.slice(0, -1));
+      setActiveModal(prev);
+    } else {
+      setActiveModal(null);
+      setEditingId(null);
+    }
   };
 
   if (!isLoggedIn) {
@@ -261,9 +266,6 @@ export default function POSPage() {
               <button type="submit" className="btn btn-primary">Iniciar Sesión</button>
             </div>
           </form>
-          <div style={{marginTop: '15px', fontSize: '10px', color: '#666', borderTop: '1px solid #999', paddingTop: '10px'}}>
-            * Si el sistema es nuevo, use <strong>admin@sistema.com</strong> / <strong>123</strong> para inicializar.
-          </div>
           <div id="notification" className="notification"></div>
         </div>
       </div>

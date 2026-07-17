@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -88,17 +87,19 @@ export function Modals({
   useEffect(() => {
     if (activeModal === 'modalProducto' && editingId !== null) {
       const p = products[editingId];
-      setProductForm({
-        ...p,
-        costoPromedio: p.costoPromedio?.toString() || '0',
-        utilidadPorcentaje: p.utilidadPorcentaje?.toString() || '0',
-        precio1: p.precio1?.toString() || '0',
-        precio2: p.precio2?.toString() || '0',
-        precio3: p.precio3?.toString() || '0',
-        precio4: p.precio4?.toString() || '0',
-        stock: p.stock?.toString() || '0',
-        stockMin: p.stockMin?.toString() || '0'
-      });
+      if (p) {
+        setProductForm({
+          ...p,
+          costoPromedio: p.costoPromedio?.toString() || '0',
+          utilidadPorcentaje: p.utilidadPorcentaje?.toString() || '0',
+          precio1: p.precio1?.toString() || '0',
+          precio2: p.precio2?.toString() || '0',
+          precio3: p.precio3?.toString() || '0',
+          precio4: p.precio4?.toString() || '0',
+          stock: p.stock?.toString() || '0',
+          stockMin: p.stockMin?.toString() || '0'
+        });
+      }
     } else if (activeModal === 'modalProducto' && editingId === null) {
       setProductForm({
         codigo: '', nombre: '', categoria: 'Accesorio', marca: 'Toyota', 
@@ -112,18 +113,17 @@ export function Modals({
     } else if (activeModal === 'modalProveedor' && editingId !== null) {
       const p = providers.find(prov => prov.id === editingId);
       if (p) setProviderForm(p);
+    } else if (activeModal === 'modalProveedor' && editingId === null) {
+      setProviderForm({ id: '', rif: '', nombre: '', direccion: '', contacto: '', telefono: '' });
     }
   }, [activeModal, editingId, products, clients, providers]);
 
-  // Lógica de Recálculo Tridireccional: MARGEN SOBRE VENTA (Texto libre)
-  // Formula: Precio = Costo / (1 - (Margen / 100))
   const handlePriceUpdate = (type: 'margin' | 'usd' | 'bs' | 'cost' | 'iva' | 'exento', rawValue: any) => {
     let newForm = { ...productForm };
     const numValue = (type === 'iva' || type === 'exento') ? rawValue : parseFloat(rawValue);
     const costNum = type === 'cost' ? numValue : parseFloat(newForm.costoPromedio);
     const tasa = config.tasa || 1;
 
-    // Persistimos el string exacto para permitir "0." o ""
     if (type === 'cost') newForm.costoPromedio = rawValue;
     if (type === 'margin') newForm.utilidadPorcentaje = rawValue;
     if (type === 'usd') newForm.precio1 = rawValue;
@@ -180,23 +180,6 @@ export function Modals({
     }
   };
 
-  const handleEntradaPayment = (type: 'usd' | 'bs', value: number) => {
-    const tasa = entradaHeader.tasaBcv || 1;
-    if (type === 'usd') {
-      setEntradaHeader({
-        ...entradaHeader,
-        pagoContadoUsd: value,
-        pagoContadoBs: Number((value * tasa).toFixed(2))
-      });
-    } else {
-      setEntradaHeader({
-        ...entradaHeader,
-        pagoContadoBs: value,
-        pagoContadoUsd: Number((value / tasa).toFixed(4))
-      });
-    }
-  };
-
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -231,6 +214,35 @@ export function Modals({
       onClose();
     } catch (error) {
       notify('❌ Error al guardar cliente', 'error');
+    }
+  };
+
+  const handleSaveProvider = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const id = providerForm.id || uuidv4();
+      await setDoc(doc(db, 'providers', id), { ...providerForm, id });
+      notify('✅ Proveedor guardado');
+      onClose();
+    } catch (error) {
+      notify('❌ Error al guardar proveedor', 'error');
+    }
+  };
+
+  const handleEntradaPayment = (type: 'usd' | 'bs', value: number) => {
+    const tasa = entradaHeader.tasaBcv || 1;
+    if (type === 'usd') {
+      setEntradaHeader({
+        ...entradaHeader,
+        pagoContadoUsd: value,
+        pagoContadoBs: Number((value * tasa).toFixed(2))
+      });
+    } else {
+      setEntradaHeader({
+        ...entradaHeader,
+        pagoContadoBs: value,
+        pagoContadoUsd: Number((value / tasa).toFixed(4))
+      });
     }
   };
 
@@ -617,6 +629,97 @@ export function Modals({
         </div>
       )}
 
+      {activeModal === 'modalCliente' && (
+        <div className="modal-window" style={{ width: '500px' }} onClick={e => e.stopPropagation()}>
+          <div className="win-titlebar">
+            <span className="flex items-center gap-2"><UserCircle size={14}/> FICHA DE CLIENTE</span>
+            <span className="modal-close" onClick={onClose}></span>
+          </div>
+          <form onSubmit={handleSaveClient}>
+            <div className="modal-body space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="form-group">
+                  <label className="font-bold">Tipo:</label>
+                  <select className="win-input" value={clientForm.tipoRif} onChange={e => setClientForm({...clientForm, tipoRif: e.target.value})}>
+                    <option value="V">V</option>
+                    <option value="J">J</option>
+                    <option value="G">G</option>
+                    <option value="E">E</option>
+                  </select>
+                </div>
+                <div className="form-group col-span-2">
+                  <label className="font-bold">RIF / Cédula:</label>
+                  <input type="text" required value={clientForm.rifNum} onChange={e => setClientForm({...clientForm, rifNum: e.target.value})} className="win-input" />
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="font-bold">Nombre o Razón Social:</label>
+                <input type="text" required value={clientForm.nombre} onChange={e => setClientForm({...clientForm, nombre: e.target.value})} className="win-input" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="form-group">
+                  <label className="font-bold">Teléfono:</label>
+                  <input type="text" value={clientForm.telefono} onChange={e => setClientForm({...clientForm, telefono: e.target.value})} className="win-input" />
+                </div>
+                <div className="form-group">
+                  <label className="font-bold">Email:</label>
+                  <input type="email" value={clientForm.email} onChange={e => setClientForm({...clientForm, email: e.target.value})} className="win-input" />
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="font-bold">Dirección:</label>
+                <input type="text" value={clientForm.direccion} onChange={e => setClientForm({...clientForm, direccion: e.target.value})} className="win-input" />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn btn-primary font-bold">GUARDAR CLIENTE</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {activeModal === 'modalProveedor' && (
+        <div className="modal-window" style={{ width: '500px' }} onClick={e => e.stopPropagation()}>
+          <div className="win-titlebar">
+            <span className="flex items-center gap-2"><Truck size={14}/> FICHA DE PROVEEDOR</span>
+            <span className="modal-close" onClick={onClose}></span>
+          </div>
+          <form onSubmit={handleSaveProvider}>
+            <div className="modal-body space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="form-group">
+                  <label className="font-bold">RIF / Identificación:</label>
+                  <input type="text" required value={providerForm.rif} onChange={e => setProviderForm({...providerForm, rif: e.target.value.toUpperCase()})} className="win-input" />
+                </div>
+                <div className="form-group">
+                  <label className="font-bold">Nombre / Razón Social:</label>
+                  <input type="text" required value={providerForm.nombre} onChange={e => setProviderForm({...providerForm, nombre: e.target.value})} className="win-input" />
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="font-bold">Dirección Fiscal:</label>
+                <input type="text" value={providerForm.direccion} onChange={e => setProviderForm({...providerForm, direccion: e.target.value})} className="win-input" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="form-group">
+                  <label className="font-bold">Persona de Contacto:</label>
+                  <input type="text" value={providerForm.contacto} onChange={e => setProviderForm({...providerForm, contacto: e.target.value})} className="win-input" />
+                </div>
+                <div className="form-group">
+                  <label className="font-bold">Teléfono:</label>
+                  <input type="text" value={providerForm.telefono} onChange={e => setProviderForm({...providerForm, telefono: e.target.value})} className="win-input" />
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn btn-primary font-bold">GUARDAR PROVEEDOR</button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {activeModal === 'modalNuevoUsuario' && (
         <div className="modal-window" style={{ width: '400px' }} onClick={e => e.stopPropagation()}>
           <div className="win-titlebar">
@@ -739,7 +842,7 @@ export function Modals({
             </div>
 
             <div className="toolbar bg-gray-200 p-2 border border-gray-400">
-               <button type="button" className="btn px-3 flex items-center gap-2"><Plus size={14}/> NUEVA FICHA</button>
+               <button type="button" className="btn px-3 flex items-center gap-2" onClick={() => onOpenModal('modalProducto')}><Plus size={14}/> NUEVA FICHA</button>
                <div className="relative flex-1 mx-2">
                  <input 
                     type="text" 
@@ -938,6 +1041,64 @@ export function Modals({
             <button type="button" className="btn" onClick={onClose}>Volver</button>
             <button type="button" className="btn btn-success font-black text-lg px-8 py-2" onClick={finalizeSale}>💾 FINALIZAR VENTA</button>
           </div>
+        </div>
+      )}
+
+      {activeModal === 'modalDetalleVenta' && (
+        <div className="modal-window xlarge" style={{ width: '700px' }} onClick={e => e.stopPropagation()}>
+           <div className="win-titlebar">
+              <span className="flex items-center gap-2"><FileText size={14}/> DETALLE DE FACTURA: {editingId}</span>
+              <span className="modal-close" onClick={onClose}></span>
+           </div>
+           <div className="modal-body">
+              {(() => {
+                const s = sales.find(s => s.numero === editingId);
+                if (!s) return <p className="p-10 text-center">Factura no encontrada...</p>;
+                return (
+                  <div className="space-y-4">
+                     <div className="grid grid-cols-2 gap-4 bg-gray-100 p-4 border border-gray-300">
+                        <div><strong>Cliente:</strong> {s.cliente}</div>
+                        <div><strong>RIF/CI:</strong> {s.rif}</div>
+                        <div><strong>Fecha:</strong> {new Date(s.fecha).toLocaleString()}</div>
+                        <div><strong>Vendedor:</strong> {s.vendedor}</div>
+                        <div><strong>Estado:</strong> <span className={s.estado === 'Completada' ? 'text-green-700' : 'text-red-700'}>{s.estado?.toUpperCase()}</span></div>
+                        <div><strong>Referencia:</strong> {s.referencia}</div>
+                     </div>
+                     <div className="table-responsive bg-white max-h-60 overflow-y-auto border border-gray-400">
+                        <table className="data-table">
+                           <thead className="bg-gray-200">
+                              <tr>
+                                 <th>Producto</th>
+                                 <th style={{ textAlign: 'center' }}>Cant</th>
+                                 <th style={{ textAlign: 'right' }}>Precio USD</th>
+                                 <th style={{ textAlign: 'right' }}>Total USD</th>
+                              </tr>
+                           </thead>
+                           <tbody>
+                              {s.items.map((it, idx) => (
+                                 <tr key={idx}>
+                                    <td>{it.codigo} - {it.descripcion}</td>
+                                    <td style={{ textAlign: 'center' }}>{it.cantidad}</td>
+                                    <td style={{ textAlign: 'right' }}>${it.precioUsd.toFixed(2)}</td>
+                                    <td style={{ textAlign: 'right' }}>${(it.precioUsd * it.cantidad * (1 + it.iva/100)).toFixed(2)}</td>
+                                 </tr>
+                              ))}
+                           </tbody>
+                        </table>
+                     </div>
+                     <div className="flex justify-end gap-8 p-4 bg-gray-200 font-bold border border-gray-300">
+                        <span>SUBTOTAL: ${s.subtotal.toFixed(2)}</span>
+                        <span>IVA: ${s.iva.toFixed(2)}</span>
+                        <span className="text-xl text-blue-900">TOTAL: ${s.totalUsd.toFixed(2)}</span>
+                     </div>
+                  </div>
+                );
+              })()}
+           </div>
+           <div className="modal-footer">
+              <button className="btn btn-primary" onClick={() => window.print()}>🖨️ IMPRIMIR</button>
+              <button className="btn" onClick={onClose}>Cerrar</button>
+           </div>
         </div>
       )}
 
