@@ -85,6 +85,7 @@ export interface Sale {
   cliente: string;
   rif: string;
   vendedor: string;
+  terminalId: string;
   items: CartItem[];
   subtotal: number;
   iva: number;
@@ -120,6 +121,7 @@ export interface User {
   email?: string;
   role: 'Administrador' | 'Supervisor' | 'Cajero';
   active: boolean;
+  terminalId?: string;
 }
 
 export type MovementType = 'ENTRADA' | 'SALIDA' | 'AJUSTE' | 'VENTA' | 'ANULACION' | 'DEVOLUCION';
@@ -148,6 +150,7 @@ export interface CashMovement {
   referencia: string;
   concepto: string;
   usuario: string;
+  terminalId: string;
 }
 
 export interface ReportZRecord {
@@ -155,6 +158,7 @@ export interface ReportZRecord {
   numero: number;
   fecha: string;
   vendedor: string;
+  terminalId: string;
   facturaInicio: string;
   facturaFin: string;
   ventaBruta: number;

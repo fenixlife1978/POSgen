@@ -22,19 +22,26 @@ interface ReportsModuleProps {
 export function ReportsModule({ active, sales, products, clients, config, setConfig, reportsZ }: ReportsModuleProps) {
   const [selectedReport, setSelectedReport] = useState<string | null>(null);
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedTerminal, setSelectedTerminal] = useState<string>(config.terminalId || 'all');
 
   if (!active) return null;
 
-  const calculateDailyStats = async (date: string) => {
-    const daySales = sales.filter(s => s.fecha && s.fecha.startsWith(date));
+  const calculateDailyStats = async (date: string, termId: string) => {
+    let daySales = sales.filter(s => s.fecha && s.fecha.startsWith(date));
+    if (termId !== 'all') {
+      daySales = daySales.filter(s => s.terminalId === termId);
+    }
+    
     const completions = daySales.filter(s => s.estado === 'Completada');
     
     const ventaBruta = completions.reduce((acc, s) => acc + (s.subtotal || 0), 0);
     const ivaTotal = completions.reduce((acc, s) => acc + (s.iva || 0), 0);
     const ventaNeta = ventaBruta + ivaTotal;
 
-    // Obtener gastos y traslados de Firestore para el cierre
-    const cashQuery = query(collection(db, 'accounting/audit/cash_movements'), where('fecha', '>=', date), where('fecha', '<=', date + 'T23:59:59'));
+    const cashQuery = termId === 'all' 
+      ? query(collection(db, 'accounting/audit/cash_movements'), where('fecha', '>=', date), where('fecha', '<=', date + 'T23:59:59'))
+      : query(collection(db, 'accounting/audit/cash_movements'), where('fecha', '>=', date), where('fecha', '<=', date + 'T23:59:59'), where('terminalId', '==', termId));
+    
     const cashSnapshot = await getDocs(cashQuery);
     const cashLogs = cashSnapshot.docs.map(d => d.data());
     
@@ -52,16 +59,19 @@ export function ReportsModule({ active, sales, products, clients, config, setCon
   };
 
   const handleProcessZ = async () => {
-    const stats = await calculateDailyStats(filterDate);
-    if (stats.count === 0 && stats.gastos === 0) return alert("No hay operaciones para cerrar hoy.");
+    if (selectedTerminal === 'all') return alert("Seleccione una terminal específica para emitir el reporte Z.");
+    
+    const stats = await calculateDailyStats(filterDate, selectedTerminal);
+    if (stats.count === 0 && stats.gastos === 0) return alert("No hay operaciones para cerrar hoy en esta terminal.");
 
-    if (confirm(`¿Emitir REPORTE Z N° ${config.reportZCounter}?\nEste cierre consolidará Ventas, Gastos y Traslados.`)) {
+    if (confirm(`¿Emitir REPORTE Z N° ${config.reportZCounter} para Terminal ${selectedTerminal}?\nEste cierre consolidará Ventas, Gastos y Traslados de esta caja.`)) {
       const zId = uuidv4();
       const newZ: ReportZRecord = {
         id: zId,
         numero: config.reportZCounter,
         fecha: filterDate,
         vendedor: config.vendedor,
+        terminalId: selectedTerminal,
         facturaInicio: stats.facturaInicio,
         facturaFin: stats.facturaFin,
         ventaBruta: stats.ventaBruta,
@@ -69,7 +79,7 @@ export function ReportsModule({ active, sales, products, clients, config, setCon
         ivaTotal: stats.ivaTotal,
         igtfTotal: stats.ventaNeta * 0.03,
         exentoTotal: 0,
-        anulaciones: sales.filter(s => s.estado === 'Anulada' && s.fecha.startsWith(filterDate)).length,
+        anulaciones: sales.filter(s => s.estado === 'Anulada' && s.fecha.startsWith(filterDate) && s.terminalId === selectedTerminal).length,
         gastosTotal: stats.gastos,
         trasladosTotal: stats.traslados,
         grandTotalAcumulado: config.grandTotalHistory + stats.ventaNeta,
@@ -84,7 +94,7 @@ export function ReportsModule({ active, sales, products, clients, config, setCon
           grandTotalHistory: config.grandTotalHistory + stats.ventaNeta,
           lastZDate: filterDate
         });
-        alert("Cierre Z procesado exitosamente.");
+        alert(`Cierre Z procesado para terminal ${selectedTerminal}.`);
       } catch (error) {
         alert("Error al guardar el reporte Z.");
       }
@@ -99,7 +109,16 @@ export function ReportsModule({ active, sales, products, clients, config, setCon
         <button className={`btn ${selectedReport === 'ventas' ? 'btn-primary' : ''}`} onClick={() => setSelectedReport('ventas')}>📋 Libro Ventas</button>
         <button className={`btn ${selectedReport === 'gastos' ? 'btn-primary' : ''}`} onClick={() => setSelectedReport('gastos')}>💸 Gastos/Traslados</button>
         <button className={`btn ${selectedReport === 'cierre' ? 'btn-primary' : ''}`} onClick={() => setSelectedReport('cierre')}>💰 Cierre Z (Fiscal)</button>
-        <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} className="win-input ml-auto" />
+        
+        <div className="flex gap-2 items-center ml-auto">
+           <label className="text-[10px] font-bold">TERMINAL:</label>
+           <select className="win-input text-[10px]" value={selectedTerminal} onChange={e => setSelectedTerminal(e.target.value)}>
+              <option value="all">TODAS LAS CAJAS</option>
+              <option value="CAJA-01">CAJA 01 (PRINCIPAL)</option>
+              <option value="CAJA-02">CAJA 02</option>
+           </select>
+           <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} className="win-input" />
+        </div>
       </div>
 
       <div className="chart-container mt-4" style={{ flex: 1, overflowY: 'auto' }}>
@@ -107,8 +126,9 @@ export function ReportsModule({ active, sales, products, clients, config, setCon
           <div className="p-4 space-y-6">
             <div className="win-window p-8 text-center bg-gray-200 border-2 border-blue-800">
                <h3 className="text-2xl font-black text-blue-900 mb-4 uppercase">Corte de Caja Diario (Z)</h3>
-               <p className="text-sm font-bold text-gray-600 mb-6">Emisión de reporte fiscal consolidado para: {filterDate}</p>
-               <button className="btn btn-success p-10 text-xl font-black shadow-lg" onClick={handleProcessZ}>🚀 EMITIR REPORTE Z N° {config.reportZCounter}</button>
+               <p className="text-sm font-bold text-gray-600 mb-2">Emisión de reporte fiscal consolidado para: {filterDate}</p>
+               <p className="text-[10px] font-black text-red-600 mb-6 uppercase">TERMINAL SELECCIONADA: {selectedTerminal === 'all' ? 'SIN SELECCIONAR' : selectedTerminal}</p>
+               <button className="btn btn-success p-10 text-xl font-black shadow-lg" disabled={selectedTerminal === 'all'} onClick={handleProcessZ}>🚀 EMITIR REPORTE Z N° {config.reportZCounter}</button>
             </div>
 
             <div className="table-responsive w-full mt-8">
@@ -117,22 +137,22 @@ export function ReportsModule({ active, sales, products, clients, config, setCon
                  <thead>
                    <tr>
                      <th>N° Z</th>
+                     <th>Terminal</th>
                      <th>Fecha</th>
                      <th style={{ textAlign: 'right' }}>Venta Neta</th>
                      <th style={{ textAlign: 'right' }}>Gastos</th>
-                     <th style={{ textAlign: 'right' }}>Traslados</th>
                      <th style={{ textAlign: 'right' }}>Acumulado</th>
                      <th style={{ textAlign: 'center' }}>Vendedor</th>
                    </tr>
                  </thead>
                  <tbody>
-                   {reportsZ.sort((a,b) => b.numero - a.numero).map(z => (
+                   {reportsZ.filter(z => selectedTerminal === 'all' || z.terminalId === selectedTerminal).sort((a,b) => b.numero - a.numero).map(z => (
                      <tr key={z.id}>
                        <td className="font-bold">Z-{z.numero.toString().padStart(4, '0')}</td>
+                       <td className="font-bold text-blue-700">{z.terminalId || 'CAJA-01'}</td>
                        <td>{z.fecha}</td>
                        <td style={{ textAlign: 'right', fontWeight: 'bold' }}>${z.ventaNeta.toFixed(2)}</td>
                        <td style={{ textAlign: 'right', color: 'red' }}>${z.gastosTotal?.toFixed(2) || '0.00'}</td>
-                       <td style={{ textAlign: 'right', color: 'blue' }}>${z.trasladosTotal?.toFixed(2) || '0.00'}</td>
                        <td style={{ textAlign: 'right' }}>${z.grandTotalAcumulado.toFixed(2)}</td>
                        <td style={{ textAlign: 'center' }}>{z.vendedor}</td>
                      </tr>
@@ -146,17 +166,17 @@ export function ReportsModule({ active, sales, products, clients, config, setCon
         {selectedReport === 'ventas' && (
            <div className="p-4">
               <div className="dashboard-grid mb-6">
-                 <div className="dash-card"><div className="dash-value">${sales.filter(s => s.fecha.startsWith(filterDate) && s.estado === 'Completada').reduce((acc, s) => acc + s.totalUsd, 0).toFixed(2)}</div><div className="dash-label">Venta Total (USD)</div></div>
-                 <div className="dash-card"><div className="dash-value">{sales.filter(s => s.fecha.startsWith(filterDate) && s.estado === 'Completada').length}</div><div className="dash-label">Documentos</div></div>
+                 <div className="dash-card"><div className="dash-value">${sales.filter(s => s.fecha.startsWith(filterDate) && s.estado === 'Completada' && (selectedTerminal === 'all' || s.terminalId === selectedTerminal)).reduce((acc, s) => acc + s.totalUsd, 0).toFixed(2)}</div><div className="dash-label">Venta Total (USD)</div></div>
+                 <div className="dash-card"><div className="dash-value">{sales.filter(s => s.fecha.startsWith(filterDate) && s.estado === 'Completada' && (selectedTerminal === 'all' || s.terminalId === selectedTerminal)).length}</div><div className="dash-label">Documentos</div></div>
               </div>
               <div className="table-responsive">
                 <table className="data-table">
                   <thead>
-                    <tr><th>N° Factura</th><th>Hora</th><th>Cliente</th><th style={{ textAlign: 'right' }}>Base USD</th><th style={{ textAlign: 'right' }}>IVA</th><th style={{ textAlign: 'right' }}>Total USD</th></tr>
+                    <tr><th>N° Factura</th><th>Caja</th><th>Cliente</th><th style={{ textAlign: 'right' }}>Base USD</th><th style={{ textAlign: 'right' }}>IVA</th><th style={{ textAlign: 'right' }}>Total USD</th></tr>
                   </thead>
                   <tbody>
-                    {sales.filter(s => s.fecha.startsWith(filterDate) && s.estado === 'Completada').map(s => (
-                      <tr key={s.numero}><td>{s.numero}</td><td>{new Date(s.fecha).toLocaleTimeString()}</td><td>{s.cliente}</td><td style={{ textAlign: 'right' }}>${s.subtotal.toFixed(2)}</td><td style={{ textAlign: 'right' }}>${s.iva.toFixed(2)}</td><td style={{ textAlign: 'right', fontWeight: 'bold' }}>${s.totalUsd.toFixed(2)}</td></tr>
+                    {sales.filter(s => s.fecha.startsWith(filterDate) && s.estado === 'Completada' && (selectedTerminal === 'all' || s.terminalId === selectedTerminal)).map(s => (
+                      <tr key={s.numero}><td>{s.numero}</td><td>{s.terminalId || 'CAJA-01'}</td><td>{s.cliente}</td><td style={{ textAlign: 'right' }}>${s.subtotal.toFixed(2)}</td><td style={{ textAlign: 'right' }}>${s.iva.toFixed(2)}</td><td style={{ textAlign: 'right', fontWeight: 'bold' }}>${s.totalUsd.toFixed(2)}</td></tr>
                     ))}
                   </tbody>
                 </table>
@@ -171,7 +191,7 @@ export function ReportsModule({ active, sales, products, clients, config, setCon
                <button className="btn btn-primary" onClick={() => window.dispatchEvent(new CustomEvent('openModal', { detail: 'modalTraslado' }))}><ArrowRightLeft size={14}/> Traslado Banco</button>
             </div>
             <div className="win-window p-4 bg-white border border-gray-400">
-              <h4 className="font-bold mb-4 uppercase text-blue-900">Movimientos de Egreso (Caja)</h4>
+              <h4 className="font-bold mb-4 uppercase text-blue-900">Movimientos de Egreso (Caja) - {selectedTerminal === 'all' ? 'Global' : selectedTerminal}</h4>
               <p className="text-xs text-gray-500 italic mb-4">Módulo de tesorería para control de gastos operativos y retiros bancarios.</p>
             </div>
           </div>

@@ -157,6 +157,99 @@ export function Modals({
     setProductForm(newForm);
   };
 
+  const handleSaveProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const data = {
+      ...productForm,
+      costoPromedio: parseFloat(productForm.costoPromedio) || 0,
+      utilidadPorcentaje: parseFloat(productForm.utilidadPorcentaje) || 0,
+      precio1: parseFloat(productForm.precio1) || 0,
+      precio2: parseFloat(productForm.precio2) || 0,
+      precio3: parseFloat(productForm.precio3) || 0,
+      precio4: parseFloat(productForm.precio4) || 0,
+      stock: parseFloat(productForm.stock) || 0,
+      stockMin: parseFloat(productForm.stockMin) || 0,
+    };
+    await setDoc(doc(db, 'products', data.codigo), data);
+    notify('✅ Item guardado');
+    onClose();
+  };
+
+  const handleSaveProvider = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = providerForm.id || uuidv4();
+    const data = { ...providerForm, id };
+    await setDoc(doc(db, 'providers', id), data);
+    notify('✅ Proveedor guardado');
+    onClose();
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const { user } = await createUserWithEmailAndPassword(auth, userForm.email, userForm.password);
+      const userData: User = {
+        id: user.uid,
+        username: userForm.email.split('@')[0],
+        name: userForm.name,
+        email: userForm.email,
+        role: userForm.role as any,
+        active: true,
+        terminalId: config.terminalId
+      };
+      await setDoc(doc(db, 'users', user.uid), userData);
+      notify('✅ Usuario creado exitosamente');
+      onClose();
+    } catch (error: any) {
+      notify(`❌ Error: ${error.message}`, 'error');
+    }
+  };
+
+  const handleProcessApertura = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const monto = parseFloat(aperturaMonto) || 0;
+    const movId = uuidv4();
+    const fecha = new Date().toISOString();
+
+    await setDoc(doc(db, 'accounting/audit/cash_movements', movId), {
+      id: movId, fecha, tipo: 'INGRESO', montoUsd: monto, montoBs: monto * config.tasa,
+      metodo: 'Efectivo USD', referencia: 'APERTURA', terminalId: config.terminalId,
+      concepto: `APERTURA DE CAJA - TERMINAL ${config.terminalId}`, usuario: config.vendedor
+    });
+
+    notify(`✅ Caja abierta en Terminal ${config.terminalId}`);
+    onClose();
+  };
+
+  const handleProcessCobro = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAccount) return;
+    const abono = parseFloat(montoAbono) || 0;
+    const batch = writeBatch(db);
+    const fecha = new Date().toISOString();
+
+    const nuevoPagado = selectedAccount.montoPagado + abono;
+    const esTotal = nuevoPagado >= selectedAccount.montoTotal - 0.001;
+    
+    batch.update(doc(db, 'accounts', selectedAccount.id), {
+      montoPagado: nuevoPagado,
+      estado: esTotal ? 'Pagada' : 'Parcial'
+    });
+
+    const movId = uuidv4();
+    batch.set(doc(db, 'accounting/audit/cash_movements', movId), {
+      id: movId, fecha, tipo: 'INGRESO', montoUsd: abono, montoBs: abono * config.tasa,
+      metodo: 'Efectivo USD', referencia: selectedAccount.referencia, terminalId: config.terminalId,
+      concepto: `COBRO DEUDA: ${selectedAccount.entidad}`, usuario: config.vendedor
+    });
+
+    await batch.commit();
+    notify('✅ Cobro registrado exitosamente');
+    setSelectedAccount(null);
+    setMontoAbono('0');
+    onClose();
+  };
+
   const handleProcessEntrada = async (e: React.FormEvent) => {
     e.preventDefault();
     if (entradaCart.length === 0) return notify('❌ El carrito de entrada está vacío', 'error');
@@ -167,7 +260,6 @@ export function Modals({
     const abonoUsd = parseFloat(entradaHeader.pagoContadoUsd) || 0;
     const tasa = parseFloat(entradaHeader.tasaBcv) || config.tasa;
 
-    // 1. Registro de Movimientos e Inventario
     for (const item of entradaCart) {
       const prod = products.find(p => p.codigo === item.codigo);
       if (prod) {
@@ -191,17 +283,15 @@ export function Modals({
       }
     }
 
-    // 2. Libro de Caja (Si hubo pago al contado)
     if (abonoUsd > 0) {
       const movId = uuidv4();
       batch.set(doc(db, 'accounting/audit/cash_movements', movId), {
         id: movId, fecha, tipo: 'EGRESO', montoUsd: abonoUsd, montoBs: abonoUsd * tasa,
-        metodo: 'Efectivo USD', referencia: entradaHeader.nroFactura,
+        metodo: 'Efectivo USD', referencia: entradaHeader.nroFactura, terminalId: config.terminalId,
         concepto: `PAGO COMPRA: ${entradaHeader.proveedor}`, usuario: config.vendedor
       });
     }
 
-    // 3. Cuentas por Pagar (CXP)
     const pendiente = totalUsd - abonoUsd;
     if (pendiente > 0.0001) {
       const accId = uuidv4();
@@ -213,7 +303,7 @@ export function Modals({
     }
 
     await batch.commit();
-    notify('✅ Entrada por compra procesada exitosamente');
+    notify('✅ Entrada por compra procesada');
     setEntradaCart([]);
     onClose();
   };
@@ -242,7 +332,7 @@ export function Modals({
     });
 
     await batch.commit();
-    notify('✅ Ajuste de inventario registrado');
+    notify('✅ Ajuste registrado');
     onClose();
   };
 
@@ -254,11 +344,11 @@ export function Modals({
 
     await setDoc(doc(db, 'accounting/audit/cash_movements', movId), {
       id: movId, fecha, tipo: 'EGRESO', montoUsd: monto, montoBs: monto * config.tasa,
-      metodo: 'Efectivo USD', referencia: gastoForm.referencia,
+      metodo: 'Efectivo USD', referencia: gastoForm.referencia, terminalId: config.terminalId,
       concepto: `GASTO OPERATIVO: ${gastoForm.concepto}`, usuario: config.vendedor
     });
 
-    notify('✅ Gasto registrado en libro de caja');
+    notify('✅ Gasto registrado');
     onClose();
   };
 
@@ -270,11 +360,11 @@ export function Modals({
 
     await setDoc(doc(db, 'accounting/audit/cash_movements', movId), {
       id: movId, fecha, tipo: 'EGRESO', montoUsd: monto, montoBs: monto * config.tasa,
-      metodo: 'Traslado Bancario', referencia: trasladoForm.referencia,
+      metodo: 'Traslado Bancario', referencia: trasladoForm.referencia, terminalId: config.terminalId,
       concepto: `TRASLADO A BANCO: ${trasladoForm.banco}`, usuario: config.vendedor
     });
 
-    notify('✅ Traslado bancario registrado (Salida de Caja)');
+    notify('✅ Traslado registrado');
     onClose();
   };
 
@@ -286,7 +376,6 @@ export function Modals({
     const batch = writeBatch(db);
     const fecha = new Date().toISOString();
     
-    // Si es anulación total
     if (devForm.itemIdx === -1) {
       for (const item of sale.items) {
         const prod = products.find(p => p.codigo === item.codigo);
@@ -304,24 +393,22 @@ export function Modals({
       }
       batch.update(doc(db, 'sales', sale.numero), { estado: 'Anulada' });
       
-      // Egreso si se devuelve efectivo
       const movId = uuidv4();
       batch.set(doc(db, 'accounting/audit/cash_movements', movId), {
         id: movId, fecha, tipo: 'EGRESO', montoUsd: sale.totalUsd, montoBs: sale.totalBs,
-        metodo: 'Efectivo USD', referencia: sale.numero,
+        metodo: 'Efectivo USD', referencia: sale.numero, terminalId: config.terminalId,
         concepto: `REEMBOLSO ANULACION FACTURA ${sale.numero}`, usuario: config.vendedor
       });
     }
 
     await batch.commit();
-    notify('✅ Devolución/Anulación procesada');
+    notify('✅ Devolución procesada');
     onClose();
   };
 
   const finalizeSale = async () => {
     const totalUsd = cart.reduce((acc, item) => acc + (item.precioUsd * item.cantidad * (1 + item.iva / 100)), 0);
     const batch = writeBatch(db);
-    const saleId = uuidv4();
     const fecha = new Date().toISOString();
     
     const sale: Sale = {
@@ -330,6 +417,7 @@ export function Modals({
       cliente: clientInfo.name,
       rif: clientInfo.rif,
       vendedor: config.vendedor,
+      terminalId: config.terminalId,
       items: [...cart],
       subtotal: cart.reduce((acc, it) => acc + (it.precioUsd * it.cantidad), 0),
       iva: cart.reduce((acc, it) => acc + (it.precioUsd * it.cantidad * (it.iva / 100)), 0),
@@ -352,7 +440,8 @@ export function Modals({
       batch.set(doc(db, 'accounting/audit/cash_movements', movId), {
         id: movId, fecha, tipo: 'INGRESO', montoUsd: paymentState.totalPaidUsd, 
         montoBs: paymentState.totalPaidUsd * config.tasa, metodo: 'Mixto',
-        referencia: sale.numero, concepto: `VENTA FACTURA ${sale.numero}`, usuario: config.vendedor
+        referencia: sale.numero, terminalId: config.terminalId,
+        concepto: `VENTA FACTURA ${sale.numero}`, usuario: config.vendedor
       });
     }
 
@@ -400,7 +489,7 @@ export function Modals({
     await batch.commit();
     setLastSale(sale);
     setCart([]);
-    notify('✅ Flujo de venta procesado');
+    notify('✅ Venta procesada');
     onClose();
   };
 
@@ -419,6 +508,76 @@ export function Modals({
   return (
     <div className="modal-overlay active" onClick={() => { if(!lastSale) onClose(); else setLastSale(null); }}>
       
+      {activeModal === 'modalNuevoUsuario' && (
+        <div className="modal-window" style={{ width: '400px' }} onClick={e => e.stopPropagation()}>
+          <div className="win-titlebar">
+            <span className="flex items-center gap-2"><UserPlus size={14}/> REGISTRO DE NUEVO USUARIO</span>
+            <span className="modal-close" onClick={onClose}></span>
+          </div>
+          <form onSubmit={handleCreateUser}>
+            <div className="modal-body space-y-4">
+              <div className="form-group">
+                <label>Nombre Completo:</label>
+                <input type="text" required className="win-input" value={userForm.name} onChange={e => setUserForm({...userForm, name: e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label>Correo Electrónico:</label>
+                <input type="email" required className="win-input" value={userForm.email} onChange={e => setUserForm({...userForm, email: e.target.value})} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="form-group">
+                  <label>Rol Asignado:</label>
+                  <select className="win-input" value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})}>
+                    <option value="Cajero">Cajero</option>
+                    <option value="Supervisor">Supervisor</option>
+                    <option value="Administrador">Administrador</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Clave Asignada:</label>
+                  <input type="password" required className="win-input" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} />
+                </div>
+              </div>
+              <p className="text-[10px] text-gray-500 italic mt-2">Nota: El usuario se vinculará automáticamente a la terminal {config.terminalId}.</p>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn btn-primary font-bold">CREAR ACCESO</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {activeModal === 'modalDetalleVenta' && (
+        <div className="modal-window large" style={{ width: '600px' }} onClick={e => e.stopPropagation()}>
+           <div className="win-titlebar">
+              <span>🧾 DETALLE DE FACTURA {editingId}</span>
+              <span className="modal-close" onClick={onClose}></span>
+           </div>
+           <div className="modal-body">
+              {sales.find(s => s.numero === editingId) ? (
+                 <div className="space-y-6">
+                    <div className="grid grid-cols-2 gap-4 border-b pb-4">
+                       <div><strong>Cliente:</strong> {sales.find(s => s.numero === editingId)?.cliente}</div>
+                       <div><strong>Fecha:</strong> {new Date(sales.find(s => s.numero === editingId)!.fecha).toLocaleString()}</div>
+                       <div><strong>Cajero:</strong> {sales.find(s => s.numero === editingId)?.vendedor}</div>
+                       <div><strong>Terminal:</strong> {sales.find(s => s.numero === editingId)?.terminalId || 'CAJA-01'}</div>
+                    </div>
+                    <table className="data-table w-full">
+                       <thead><tr><th>Item</th><th>Cant</th><th>Precio</th><th>Total</th></tr></thead>
+                       <tbody>
+                          {sales.find(s => s.numero === editingId)?.items.map((it, i) => (
+                             <tr key={i}><td>{it.descripcion}</td><td>{it.cantidad}</td><td>${it.precioUsd.toFixed(2)}</td><td>${(it.cantidad * it.precioUsd).toFixed(2)}</td></tr>
+                          ))}
+                       </tbody>
+                    </table>
+                 </div>
+              ) : <p>Cargando datos...</p>}
+           </div>
+           <div className="modal-footer"><button className="btn" onClick={onClose}>Cerrar</button></div>
+        </div>
+      )}
+
       {activeModal === 'modalEntrada' && (
         <div className="modal-window xlarge" style={{ width: '900px' }} onClick={e => e.stopPropagation()}>
           <div className="win-titlebar">
@@ -686,6 +845,7 @@ export function Modals({
                   className="win-input text-center text-3xl font-black text-emerald-700 h-16" 
                 />
               </div>
+              <p className="text-[10px] font-bold text-blue-800 mt-2">TERMINAL: {config.terminalId}</p>
             </div>
             <div className="modal-footer">
               <button type="button" className="btn" onClick={onClose}>Cancelar</button>
