@@ -20,7 +20,7 @@ export interface Product {
   precio1: number; // Detal
   precio2: number; // Mayor
   precio3: number; // Promocion
-  precio4: number; // Costo (Venta)
+  precio4: number; // Costo (Referencial)
   ivaAlicuota: number;
   permiteDescuento: boolean;
   activo: boolean;
@@ -40,7 +40,6 @@ export interface Product {
 }
 
 export interface KitComponent {
-  productIndex: number;
   codigo: string;
   cantidad: number;
 }

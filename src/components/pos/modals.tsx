@@ -96,12 +96,13 @@ export function Modals({
     }
   }, [activeModal, editingId, products, clients, providers]);
 
-  // Lógica de Recálculo Tridireccional en Ficha Maestra
+  // Lógica de Recálculo Tridireccional en Ficha Maestra (Markup sobre Venta)
   const handlePriceUpdate = (type: 'margin' | 'usd' | 'bs' | 'cost', value: number) => {
     let newForm = { ...productForm };
     const cost = type === 'cost' ? value : productForm.costoPromedio;
     const tasa = config.tasa || 1;
 
+    // Lógica Markup: Costo + % Ganancia = Precio
     if (type === 'cost') {
       newForm.costoPromedio = value;
       newForm.precio1 = value * (1 + (newForm.utilidadPorcentaje / 100));
@@ -123,11 +124,8 @@ export function Modals({
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // 1. Crear en Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, userForm.email, userForm.password);
       const newUser = userCredential.user;
-
-      // 2. Guardar perfil en Firestore
       await setDoc(doc(db, 'users', newUser.uid), {
         id: newUser.uid,
         name: userForm.name,
@@ -135,17 +133,13 @@ export function Modals({
         role: userForm.role,
         active: true
       });
-
-      notify('✅ Usuario creado exitosamente en Auth y Firestore');
-      setUserForm({ name: '', email: '', role: 'Cajero', password: '' });
+      notify('✅ Usuario creado exitosamente');
       onClose();
     } catch (error: any) {
-      console.error("Error creating user:", error);
       notify(`❌ Error: ${error.message}`, 'error');
     }
   };
 
-  // Lógica de Recálculo Recíproco en Entrada por Compra
   const handleEntradaPayment = (type: 'usd' | 'bs', value: number) => {
     const tasa = entradaHeader.tasaBcv || 1;
     if (type === 'usd') {
@@ -197,7 +191,7 @@ export function Modals({
     
     setProductForm({
       ...productForm,
-      kitComponents: [...productForm.kitComponents, { codigo: product.codigo, cantidad: 1, productIndex: products.indexOf(product) }]
+      kitComponents: [...productForm.kitComponents, { codigo: product.codigo, cantidad: 1 }]
     });
     setKitSearch('');
   };
@@ -207,55 +201,40 @@ export function Modals({
       notify('❌ Complete los datos del proveedor e items', 'warning');
       return;
     }
-
     const batch = writeBatch(db);
     const fecha = new Date().toISOString();
-
     for (const item of entradaCart) {
       const product = products.find(p => p.codigo === item.codigo);
       if (product) {
         const stockPrev = product.stock;
         const newStock = stockPrev + item.cantidad;
-        const totalStock = newStock;
-        const newCostoPromedio = ((product.costoPromedio * stockPrev) + (item.costo * item.cantidad)) / totalStock;
-
+        const newCostoPromedio = ((product.costoPromedio * stockPrev) + (item.costo * item.cantidad)) / newStock;
         batch.update(doc(db, 'products', product.codigo), {
           stock: newStock,
           costoPromedio: newCostoPromedio,
           costoActual: item.costo
         });
-
         const logId = uuidv4();
         batch.set(doc(db, `products/${product.codigo}/logs`, logId), {
           id: logId, fecha, codigoProducto: product.codigo, tipo: 'ENTRADA',
           cantidad: item.cantidad, stockPrevio: stockPrev, stockNuevo: newStock,
           costo: item.costo, referencia: entradaHeader.nroFactura,
-          comentario: `Recepción de mercancía - Fact: ${entradaHeader.nroFactura}`,
+          comentario: `Recepción - Fact: ${entradaHeader.nroFactura}`,
           usuario: config.vendedor
         });
       }
     }
-
     const totalFactUsd = entradaCart.reduce((s, it) => s + (it.costo * it.cantidad), 0);
     const saldoPendiente = totalFactUsd - entradaHeader.pagoContadoUsd;
-
     if (saldoPendiente > 0.0001) {
       const accId = uuidv4();
       batch.set(doc(db, 'accounts', accId), {
-        id: accId,
-        entidad: entradaHeader.proveedor,
-        montoTotal: totalFactUsd,
-        montoPagado: entradaHeader.pagoContadoUsd,
-        fechaEmision: fecha,
-        estado: 'Pendiente',
-        referencia: entradaHeader.nroFactura,
-        tipo: 'CXP'
+        id: accId, entidad: entradaHeader.proveedor, montoTotal: totalFactUsd, montoPagado: entradaHeader.pagoContadoUsd,
+        fechaEmision: fecha, estado: 'Pendiente', referencia: entradaHeader.nroFactura, tipo: 'CXP'
       });
     }
-
     await batch.commit();
     notify('✅ Entrada procesada exitosamente');
-    setEntradaCart([]);
     onClose();
   };
 
@@ -288,7 +267,7 @@ export function Modals({
     
     for (const item of cart) {
       const product = products[item.productIndex];
-      
+      // SI ES KIT VIRTUAL: Descontar componentes individualmente
       if (item.isKit && !item.stockPropio) {
         for (const comp of product.kitComponents) {
           const compProd = products.find(p => p.codigo === comp.codigo);
@@ -296,7 +275,6 @@ export function Modals({
             const qtyToDeduct = comp.cantidad * item.cantidad;
             const newStock = compProd.stock - qtyToDeduct;
             batch.update(doc(db, 'products', compProd.codigo), { stock: newStock });
-            
             const logId = uuidv4();
             batch.set(doc(db, `products/${compProd.codigo}/logs`, logId), {
               id: logId, fecha: sale.fecha, codigoProducto: compProd.codigo, tipo: 'VENTA', 
@@ -316,7 +294,6 @@ export function Modals({
         });
       }
     }
-
     await batch.commit();
     setLastSale(sale);
     setCart([]);
@@ -326,8 +303,6 @@ export function Modals({
 
   const totalFacturaUsd = entradaCart.reduce((s, it) => s + (it.costo * it.cantidad), 0);
   const equivBs = totalFacturaUsd * entradaHeader.tasaBcv;
-  const totalPagadoUsd = entradaHeader.pagoContadoUsd;
-  const totalPendienteUsd = totalFacturaUsd - totalPagadoUsd;
 
   if (!activeModal && !lastSale) return null;
 
@@ -335,13 +310,13 @@ export function Modals({
     <div className="modal-overlay active" onClick={() => { if(!lastSale) onClose(); else setLastSale(null); }}>
       
       {activeModal === 'modalProducto' && (
-        <div className="modal-window xlarge" onClick={e => e.stopPropagation()} style={{ width: '850px', maxHeight: '90vh' }}>
+        <div className="modal-window xlarge" onClick={e => e.stopPropagation()} style={{ width: '850px', maxHeight: '95vh', overflowY: 'auto' }}>
           <div className="win-titlebar">
             <span className="flex items-center gap-2"><Package size={14}/> FICHA MAESTRA DE PRODUCTO</span>
             <span className="modal-close" onClick={onClose}></span>
           </div>
           <form onSubmit={handleSaveProduct}>
-            <div className="modal-body overflow-y-auto" style={{ padding: '15px' }}>
+            <div className="modal-body p-6">
               <div className="grid grid-cols-3 gap-6 mb-6">
                 <div className="win-window p-4" style={{ background: '#c0c0c0', border: '1px solid #808080' }}>
                    <div className="form-group mb-4">
@@ -458,10 +433,10 @@ export function Modals({
                           <label className="font-bold">Stock Inicial:</label>
                           <input 
                             type="number" value={productForm.stock} 
-                            disabled={productForm.isKit && !productForm.stockPropio}
+                            disabled={editingId !== null || (productForm.isKit && !productForm.stockPropio)}
                             onChange={e => setProductForm({...productForm, stock: parseInt(e.target.value) || 0})} 
-                            className={`win-input ${productForm.isKit && !productForm.stockPropio ? 'bg-gray-200' : ''}`}
-                            style={{ backgroundColor: (productForm.isKit && !productForm.stockPropio) ? '' : '#ffffcc' }}
+                            className={`win-input ${ (editingId !== null || (productForm.isKit && !productForm.stockPropio)) ? 'bg-gray-200' : ''}`}
+                            style={{ backgroundColor: (editingId !== null || (productForm.isKit && !productForm.stockPropio)) ? '' : '#ffffcc' }}
                           />
                        </div>
                     </div>
@@ -567,7 +542,7 @@ export function Modals({
                  )}
               </div>
             </div>
-            <div className="modal-footer" style={{ padding: '15px' }}>
+            <div className="modal-footer p-6">
               <button type="button" className="btn px-8" onClick={onClose}>Cancelar</button>
               <button type="submit" className="btn btn-primary px-8 font-bold flex items-center gap-2">
                 <Save size={14}/> GUARDAR FICHA MAESTRA
@@ -620,9 +595,6 @@ export function Modals({
                   onChange={e => setUserForm({...userForm, password: e.target.value})} 
                   className="win-input" placeholder="Min. 6 caracteres"
                 />
-              </div>
-              <div className="bg-blue-50 p-2 border border-blue-200 text-[10px] text-blue-700">
-                ℹ️ Al crear el usuario, este quedará registrado inmediatamente en Firebase Auth y Firestore.
               </div>
             </div>
             <div className="modal-footer">
@@ -782,11 +754,11 @@ export function Modals({
                </div>
                <div className="flex flex-col">
                   <span className="text-[10px] font-bold text-gray-600 uppercase">Total Pagado USD</span>
-                  <span className="text-2xl font-black text-green-700">${totalPagadoUsd.toFixed(4)}</span>
+                  <span className="text-2xl font-black text-green-700">${entradaHeader.pagoContadoUsd.toFixed(4)}</span>
                </div>
                <div className="flex flex-col">
                   <span className="text-[10px] font-bold text-gray-600 uppercase">Pendiente USD (Crédito)</span>
-                  <span className="text-2xl font-black text-red-700">${totalPendienteUsd.toFixed(4)}</span>
+                  <span className="text-2xl font-black text-red-700">${(totalFacturaUsd - entradaHeader.pagoContadoUsd).toFixed(4)}</span>
                </div>
             </div>
           </div>
@@ -831,21 +803,19 @@ export function Modals({
           <div className="modal-footer">
              <button type="button" className="btn" onClick={onClose}>Cancelar</button>
              <button type="button" className="btn btn-primary font-bold" onClick={async () => {
-                if (!inventoryForm.codigo || inventoryForm.cantidad === 0) return notify('❌ Datos incompletos', 'error');
                 const product = products.find(p => p.codigo === inventoryForm.codigo);
                 if (product) {
                   const stockPrev = product.stock;
                   const newStock = stockPrev + inventoryForm.cantidad;
                   await updateDoc(doc(db, 'products', product.codigo), { stock: newStock });
-                  
                   const logId = uuidv4();
                   await setDoc(doc(db, `products/${product.codigo}/logs`, logId), {
                     id: logId, fecha: new Date().toISOString(), codigoProducto: product.codigo, tipo: 'AJUSTE',
                     cantidad: inventoryForm.cantidad, stockPrevio: stockPrev, stockNuevo: newStock,
-                    costo: inventoryForm.costo || product.costoPromedio, referencia: 'AJUSTE-MANUAL',
+                    costo: inventoryForm.costo || product.costoPromedio, referencia: 'AJUSTE',
                     comentario: inventoryForm.comentario, usuario: config.vendedor
                   });
-                  notify('✅ Ajuste realizado correctamente');
+                  notify('✅ Ajuste procesado');
                   onClose();
                 }
              }}>APLICAR AJUSTE</button>
@@ -867,7 +837,6 @@ export function Modals({
                   EQV. BS: { (cart.reduce((s, i) => s + (i.precioUsd * i.cantidad * (1 + i.iva/100)), 0) * config.tasa).toLocaleString('es-VE', {minimumFractionDigits:2}) }
                 </div>
              </div>
-             
              <div className="grid grid-cols-2 gap-4">
                <div className="form-group">
                   <label>Método:</label>
@@ -881,15 +850,9 @@ export function Modals({
                </div>
                <div className="form-group">
                   <label>Monto Recibido:</label>
-                  <input 
-                    ref={amountRef} type="number" 
-                    value={paymentState.amount || ''} 
-                    onChange={e => setPaymentState({...paymentState, amount: parseFloat(e.target.value) || 0})} 
-                    className="win-input font-bold text-lg text-right" 
-                  />
+                  <input ref={amountRef} type="number" value={paymentState.amount || ''} onChange={e => setPaymentState({...paymentState, amount: parseFloat(e.target.value) || 0})} className="win-input font-bold text-lg text-right" />
                </div>
              </div>
-
              <button type="button" className="btn btn-primary w-full py-2 font-bold" onClick={() => {
                 if (!paymentState.amount) return;
                 const usd = paymentState.method.includes('USD') || paymentState.method === 'Zelle' ? paymentState.amount : paymentState.amount / config.tasa;
@@ -897,7 +860,6 @@ export function Modals({
                 const newPays = [...paymentState.payments, { method: paymentState.method, usd, bs }];
                 setPaymentState({...paymentState, payments: newPays, totalPaidUsd: newPays.reduce((s, p) => s + p.usd, 0), amount: 0});
              }}>➕ REGISTRAR PAGO</button>
-
              <div className="win-window p-3 bg-gray-300 space-y-2 border-2 border-gray-400">
                 <div className="flex justify-between text-lg font-black pt-2">
                   <span>FALTANTE:</span> 
@@ -909,14 +871,7 @@ export function Modals({
           </div>
           <div className="modal-footer">
             <button type="button" className="btn" onClick={onClose}>Volver</button>
-            <button 
-              type="button"
-              className="btn btn-success font-black text-lg px-8 py-2" 
-              disabled={paymentState.totalPaidUsd < cart.reduce((s, i) => s + (i.precioUsd * i.cantidad * (1 + i.iva/100)), 0) * 0.99}
-              onClick={finalizeSale}
-            >
-              💾 FINALIZAR VENTA
-            </button>
+            <button type="button" className="btn btn-success font-black text-lg px-8 py-2" onClick={finalizeSale}>💾 FINALIZAR VENTA</button>
           </div>
         </div>
       )}
