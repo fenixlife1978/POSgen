@@ -133,7 +133,7 @@ export default function POSPage() {
         <span style={{ marginLeft: 'auto', fontSize: '11px' }}>{config.nombreEmpresa} | {currentUser?.name} ({currentUser?.role}) | Terminal: {config.terminalId}</span>
       </div>
       <div className="nav-tabs">
-        {[{ id: 'pos', label: 'Venta (POS)' }, { id: 'dashboard', label: 'Resumen' }, { id: 'productos', label: 'Repuestos' }, { id: 'clientes', label: 'Clientes' }, { id: 'ventas', label: 'Historial' }, { id: 'reportes', label: 'Contabilidad' }, { id: 'cuentas', label: 'Cuentas x Cobrar/Pagar' }, { id: 'config', label: 'Ajustes' }].map(m => (
+        {[{ id: 'pos', label: 'Venta (POS)' }, { id: 'dashboard', label: 'Resumen' }, { id: 'productos', label: 'Productos' }, { id: 'clientes', label: 'Clientes' }, { id: 'ventas', label: 'Historial' }, { id: 'reportes', label: 'Contabilidad' }, { id: 'cuentas', label: 'Cuentas x Cobrar/Pagar' }, { id: 'config', label: 'Ajustes' }].map(m => (
           <div key={m.id} className={`nav-tab ${activeModule === m.id ? 'active' : ''}`} onClick={() => setActiveModule(m.id)}>{m.label}</div>
         ))}
       </div>
