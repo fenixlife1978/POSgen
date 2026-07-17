@@ -56,8 +56,8 @@ export function Modals({
   const [productForm, setProductForm] = useState<Product | any>({
     codigo: '', nombre: '', categoria: 'Accesorio', marca: 'Toyota', 
     barcode: '', referencia: '', unidad: 'Unidad', departamento: 'Tienda',
-    costoPromedio: 0, utilidadPorcentaje: 22.22, precio1: 0, precio2: 0, precio3: 0, precio4: 0,
-    stock: 0, stockMin: 5, iva: 16, activo: true, isService: false, isKit: false, stockPropio: true,
+    costoPromedio: 0, utilidadPorcentaje: 20, precio1: 0, precio2: 0, precio3: 0, precio4: 0,
+    stock: 0, stockMin: 5, iva: 16, exento: false, activo: true, isService: false, isKit: false, stockPropio: true,
     kitComponents: [], ubicacion: ''
   });
 
@@ -96,26 +96,34 @@ export function Modals({
     }
   }, [activeModal, editingId, products, clients, providers]);
 
-  // Lógica de Recálculo Tridireccional en Ficha Maestra (Markup sobre Venta)
-  const handlePriceUpdate = (type: 'margin' | 'usd' | 'bs' | 'cost', value: number) => {
+  // Lógica de Recálculo Tridireccional: MARGEN SOBRE VENTA
+  // Formula: Precio = Costo / (1 - (Margen / 100))
+  const handlePriceUpdate = (type: 'margin' | 'usd' | 'bs' | 'cost' | 'iva' | 'exento', value: any) => {
     let newForm = { ...productForm };
     const cost = type === 'cost' ? value : productForm.costoPromedio;
     const tasa = config.tasa || 1;
 
-    // Lógica Markup: Costo + % Ganancia = Precio
-    if (type === 'cost') {
+    if (type === 'exento') {
+      newForm.exento = value;
+      newForm.iva = value ? 0 : 16;
+    } else if (type === 'iva') {
+      newForm.iva = value;
+      newForm.exento = value === 0;
+    } else if (type === 'cost') {
       newForm.costoPromedio = value;
-      newForm.precio1 = value * (1 + (newForm.utilidadPorcentaje / 100));
+      const margin = newForm.utilidadPorcentaje / 100;
+      newForm.precio1 = margin < 1 ? value / (1 - margin) : value;
     } else if (type === 'margin') {
       newForm.utilidadPorcentaje = value;
-      newForm.precio1 = cost * (1 + (value / 100));
+      const margin = value / 100;
+      newForm.precio1 = margin < 1 ? cost / (1 - margin) : cost;
     } else if (type === 'usd') {
       newForm.precio1 = value;
-      newForm.utilidadPorcentaje = cost > 0 ? ((value / cost) - 1) * 100 : 0;
+      newForm.utilidadPorcentaje = value > 0 ? (1 - (cost / value)) * 100 : 0;
     } else if (type === 'bs') {
       const usdValue = value / tasa;
       newForm.precio1 = usdValue;
-      newForm.utilidadPorcentaje = cost > 0 ? ((usdValue / cost) - 1) * 100 : 0;
+      newForm.utilidadPorcentaje = usdValue > 0 ? (1 - (cost / usdValue)) * 100 : 0;
     }
 
     setProductForm(newForm);
@@ -267,7 +275,6 @@ export function Modals({
     
     for (const item of cart) {
       const product = products[item.productIndex];
-      // SI ES KIT VIRTUAL: Descontar componentes individualmente
       if (item.isKit && !item.stockPropio) {
         for (const comp of product.kitComponents) {
           const compProd = products.find(p => p.codigo === comp.codigo);
@@ -381,6 +388,7 @@ export function Modals({
                           <option value="Taller">Taller</option>
                         </select>
                         <button type="button" className="btn px-2"><Plus size={10}/></button>
+                        <button type="button" className="btn px-2"><Minus size={10}/></button>
                       </div>
                    </div>
                 </div>
@@ -395,7 +403,7 @@ export function Modals({
                       />
                    </div>
                    <div className="form-group mb-4">
-                      <label className="font-bold">Ganancia Markup (%):</label>
+                      <label className="font-bold">Margen sobre Venta (%):</label>
                       <input 
                         type="number" value={productForm.utilidadPorcentaje} 
                         onChange={e => handlePriceUpdate('margin', parseFloat(e.target.value) || 0)} 
@@ -423,7 +431,7 @@ export function Modals({
 
               <div className="grid grid-cols-2 gap-6">
                  <div className="win-window p-6" style={{ background: '#c0c0c0', border: '1px solid #808080' }}>
-                    <h4 className="text-blue-800 font-bold mb-4 uppercase text-xs">STOCK Y TIPO</h4>
+                    <h4 className="text-blue-800 font-bold mb-4 uppercase text-xs">STOCK E IMPUESTOS</h4>
                     <div className="grid grid-cols-2 gap-4">
                        <div className="form-group">
                           <label className="font-bold">Stock Mínimo:</label>
@@ -438,6 +446,22 @@ export function Modals({
                             className={`win-input ${ (editingId !== null || (productForm.isKit && !productForm.stockPropio)) ? 'bg-gray-200' : ''}`}
                             style={{ backgroundColor: (editingId !== null || (productForm.isKit && !productForm.stockPropio)) ? '' : '#ffffcc' }}
                           />
+                       </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 mt-4">
+                       <div className="form-group">
+                          <label className="font-bold">Lector IVA (%):</label>
+                          <select className="win-input font-bold" value={productForm.iva} onChange={e => handlePriceUpdate('iva', parseInt(e.target.value) || 0)}>
+                            <option value={16}>16% (General)</option>
+                            <option value={8}>8% (Reducido)</option>
+                            <option value={0}>0% (Exento)</option>
+                          </select>
+                       </div>
+                       <div className="form-group flex items-end">
+                          <label className="flex items-center gap-2 font-bold cursor-pointer h-10 win-input bg-white border border-gray-400">
+                             <input type="checkbox" checked={productForm.exento} onChange={e => handlePriceUpdate('exento', e.target.checked)} className="size-4" />
+                             ITEM EXENTO
+                          </label>
                        </div>
                     </div>
                     <div className="form-group mt-4">
