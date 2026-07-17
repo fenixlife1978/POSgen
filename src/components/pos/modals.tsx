@@ -8,7 +8,7 @@ import {
   Wallet, Search, Trash2, Save, CreditCard, UserPlus, 
   Shield, Mail, Key, Package, UserCircle, Truck, 
   RefreshCcw, AlertCircle, TrendingUp, DollarSign,
-  PlusCircle, MinusCircle, FileText, UserCheck
+  PlusCircle, MinusCircle, FileText, UserCheck, Plus
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, setDoc, writeBatch, deleteDoc, updateDoc, increment } from 'firebase/firestore';
@@ -68,6 +68,19 @@ export function Modals({
     id: '', rif: '', nombre: '', direccion: '', contacto: '', telefono: ''
   });
 
+  // Estado para Entrada por Compra (Recepción) idéntico a la imagen
+  const [entradaHeader, setEntradaHeader] = useState({
+    proveedor: '',
+    nroFactura: '00021',
+    tasaBcv: 36.5,
+    tipoCompra: 'Mixto',
+    diasCredito: 7,
+    pagoContadoUsd: 0,
+    pagoContadoBs: 0
+  });
+  const [entradaSearch, setEntradaSearch] = useState('');
+  const [entradaCart, setEntradaCart] = useState<any[]>([]);
+
   const [inventoryForm, setInventoryForm] = useState({
     codigo: '', cantidad: 0, costo: 0, referencia: '', comentario: ''
   });
@@ -88,10 +101,21 @@ export function Modals({
     } else if (activeModal === 'modalProcesar') {
       setPaymentState({ method: 'Efectivo USD', amount: 0, payments: [], totalPaidUsd: 0 });
       setTimeout(() => methodRef.current?.focus(), 100);
-    } else if (activeModal === 'modalEntrada' || activeModal === 'modalAjuste') {
+    } else if (activeModal === 'modalEntrada') {
+      setEntradaHeader({
+        proveedor: '',
+        nroFactura: '00021',
+        tasaBcv: config.tasa || 36.5,
+        tipoCompra: 'Mixto',
+        diasCredito: 7,
+        pagoContadoUsd: 0,
+        pagoContadoBs: 0
+      });
+      setEntradaCart([]);
+    } else if (activeModal === 'modalAjuste') {
       setInventoryForm({ codigo: '', cantidad: 0, costo: 0, referencia: '', comentario: '' });
     }
-  }, [activeModal, editingId, products, clients, providers]);
+  }, [activeModal, editingId, products, clients, providers, config.tasa]);
 
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,8 +152,64 @@ export function Modals({
     }
   };
 
-  const handleInventoryOperation = async (type: 'ENTRADA' | 'AJUSTE') => {
-    if (!inventoryForm.codigo || inventoryForm.cantidad <= 0) {
+  const addToEntrada = (product: Product) => {
+    const existing = entradaCart.find(item => item.codigo === product.codigo);
+    if (existing) {
+      setEntradaCart(entradaCart.map(item => item.codigo === product.codigo ? { ...item, cant: item.cant + 1 } : item));
+    } else {
+      setEntradaCart([...entradaCart, {
+        codigo: product.codigo,
+        descripcion: product.nombre,
+        cant: 1,
+        costoUsd: product.costoPromedio,
+        subtotal: product.costoPromedio
+      }]);
+    }
+    setEntradaSearch('');
+  };
+
+  const handleProcesarEntrada = async () => {
+    if (entradaCart.length === 0) return notify('❌ No hay items en la compra', 'error');
+    
+    try {
+      const batch = writeBatch(db);
+      for (const item of entradaCart) {
+        const product = products.find(p => p.codigo === item.codigo);
+        if (product) {
+          const stockPrevio = product.stock;
+          const stockNuevo = stockPrevio + item.cant;
+          const logId = uuidv4();
+          
+          batch.update(doc(db, 'products', product.codigo), { 
+            stock: stockNuevo,
+            costoPromedio: item.costoUsd 
+          });
+          
+          batch.set(doc(db, `products/${product.codigo}/logs`, logId), {
+            id: logId,
+            fecha: new Date().toISOString(),
+            codigoProducto: product.codigo,
+            tipo: 'ENTRADA',
+            cantidad: item.cant,
+            stockPrevio,
+            stockNuevo,
+            costo: item.costoUsd,
+            referencia: entradaHeader.nroFactura,
+            comentario: `Entrada por compra - Fact: ${entradaHeader.nroFactura}`,
+            usuario: config.vendedor
+          });
+        }
+      }
+      await batch.commit();
+      notify('✅ Entrada procesada exitosamente');
+      onClose();
+    } catch (error) {
+      notify('❌ Error al procesar entrada', 'error');
+    }
+  };
+
+  const handleInventoryOperation = async (type: 'AJUSTE') => {
+    if (!inventoryForm.codigo || inventoryForm.cantidad === 0) {
       return notify('❌ Datos de inventario inválidos', 'error');
     }
 
@@ -158,7 +238,7 @@ export function Modals({
       });
 
       await batch.commit();
-      notify(`✅ ${type === 'ENTRADA' ? 'Recepción' : 'Ajuste'} procesado`);
+      notify(`✅ Ajuste procesado`);
       onClose();
     } catch (error) {
       notify('❌ Error en operación de inventario', 'error');
@@ -472,14 +552,181 @@ export function Modals({
         </div>
       )}
 
-      {/* MODAL RECEPCIÓN / AJUSTE INVENTARIO */}
-      {(activeModal === 'modalEntrada' || activeModal === 'modalAjuste') && (
+      {/* MODAL ENTRADA POR COMPRA (RECEPCIÓN) - RESTAURADO IDÉNTICO A LA IMAGEN */}
+      {activeModal === 'modalEntrada' && (
+        <div className="modal-window xlarge" onClick={e => e.stopPropagation()}>
+          <div className="modal-titlebar">
+            <span className="flex items-center gap-2"><PlusCircle size={16}/> ENTRADA POR COMPRA (RECEPCIÓN)</span>
+            <span className="modal-close" onClick={onClose}>✕</span>
+          </div>
+          <div className="modal-body" style={{ padding: '15px' }}>
+             <div className="win-window p-6 mb-6" style={{ background: '#c0c0c0', border: '2px solid #808080' }}>
+                <div className="grid grid-cols-3 gap-6">
+                   <div className="form-group">
+                      <label className="font-bold">Proveedor:</label>
+                      <input 
+                        type="text" 
+                        value={entradaHeader.proveedor} 
+                        onChange={e => setEntradaHeader({...entradaHeader, proveedor: e.target.value})}
+                        className="win-input bg-white" 
+                      />
+                   </div>
+                   <div className="form-group">
+                      <label className="font-bold">Nro Factura:</label>
+                      <input 
+                        type="text" 
+                        value={entradaHeader.nroFactura} 
+                        onChange={e => setEntradaHeader({...entradaHeader, nroFactura: e.target.value})}
+                        className="win-input bg-white" 
+                      />
+                   </div>
+                   <div className="form-group">
+                      <label className="font-bold">Tasa BCV:</label>
+                      <input 
+                        type="number" 
+                        value={entradaHeader.tasaBcv} 
+                        onChange={e => setEntradaHeader({...entradaHeader, tasaBcv: parseFloat(e.target.value) || 0})}
+                        className="win-input bg-white" 
+                      />
+                   </div>
+                </div>
+                <div className="grid grid-cols-4 gap-6 mt-4">
+                   <div className="form-group">
+                      <label className="font-bold">Tipo Compra:</label>
+                      <select 
+                        value={entradaHeader.tipoCompra} 
+                        onChange={e => setEntradaHeader({...entradaHeader, tipoCompra: e.target.value})}
+                        className="win-input bg-white"
+                      >
+                        <option value="Mixto">Mixto</option>
+                        <option value="Contado">Contado</option>
+                        <option value="Crédito">Crédito</option>
+                      </select>
+                   </div>
+                   <div className="form-group">
+                      <label className="font-bold">Días Crédito:</label>
+                      <input 
+                        type="number" 
+                        value={entradaHeader.diasCredito} 
+                        onChange={e => setEntradaHeader({...entradaHeader, diasCredito: parseInt(e.target.value) || 0})}
+                        className="win-input bg-white" 
+                      />
+                   </div>
+                   <div className="form-group">
+                      <label className="font-bold">Pago Contado (USD):</label>
+                      <input 
+                        type="number" 
+                        value={entradaHeader.pagoContadoUsd} 
+                        onChange={e => setEntradaHeader({...entradaHeader, pagoContadoUsd: parseFloat(e.target.value) || 0})}
+                        className="win-input bg-white" 
+                      />
+                   </div>
+                   <div className="form-group">
+                      <label className="font-bold">Pago Contado (Bs.):</label>
+                      <input 
+                        type="number" 
+                        value={entradaHeader.pagoContadoBs} 
+                        onChange={e => setEntradaHeader({...entradaHeader, pagoContadoBs: parseFloat(e.target.value) || 0})}
+                        className="win-input bg-white" 
+                      />
+                   </div>
+                </div>
+             </div>
+
+             <div className="toolbar bg-gray-300 p-3 flex gap-3 mb-4 items-center border border-gray-500">
+                <button className="btn flex items-center gap-2" onClick={() => onOpenModal('modalProducto')}><Plus size={14}/> NUEVA FICHA</button>
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2">🔍</span>
+                  <input 
+                    type="text" 
+                    placeholder="Buscar producto por código o nombre..." 
+                    className="win-input w-full pl-8 bg-white"
+                    value={entradaSearch}
+                    onChange={e => setEntradaSearch(e.target.value)}
+                  />
+                  {entradaSearch && (
+                    <div className="search-dropdown active" style={{ top: '100%', left: 0, width: '100%' }}>
+                      {products.filter(p => !p.isService && (p.codigo.toLowerCase().includes(entradaSearch.toLowerCase()) || p.nombre.toLowerCase().includes(entradaSearch.toLowerCase()))).map(p => (
+                        <div key={p.codigo} className="search-dropdown-item" onClick={() => addToEntrada(p)}>
+                          {p.codigo} - {p.nombre} (Stock: {p.stock})
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button className="btn flex items-center gap-2"><Plus size={14}/> AÑADIR ITEM</button>
+             </div>
+
+             <div className="table-responsive" style={{ height: '300px', background: 'white', border: '2px solid #808080' }}>
+                <table className="data-table">
+                   <thead>
+                      <tr>
+                        <th style={{ background: '#c0c0c0' }}>Código</th>
+                        <th style={{ background: '#c0c0c0' }}>Descripción</th>
+                        <th style={{ background: '#c0c0c0', textAlign: 'center' }}>Cant</th>
+                        <th style={{ background: '#c0c0c0', textAlign: 'right' }}>Costo USD</th>
+                        <th style={{ background: '#c0c0c0', textAlign: 'right' }}>Subtotal</th>
+                        <th style={{ background: '#c0c0c0', textAlign: 'center' }}>Acción</th>
+                      </tr>
+                   </thead>
+                   <tbody>
+                      {entradaCart.map((item, i) => (
+                        <tr key={i}>
+                          <td>{item.codigo}</td>
+                          <td className="font-bold">{item.descripcion}</td>
+                          <td style={{ textAlign: 'center' }}>
+                            <input 
+                              type="number" 
+                              value={item.cant} 
+                              onChange={e => {
+                                const val = parseFloat(e.target.value) || 0;
+                                setEntradaCart(entradaCart.map((it, idx) => idx === i ? {...it, cant: val, subtotal: val * it.costoUsd} : it));
+                              }}
+                              className="w-16 text-center border"
+                            />
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <input 
+                              type="number" 
+                              value={item.costoUsd} 
+                              onChange={e => {
+                                const val = parseFloat(e.target.value) || 0;
+                                setEntradaCart(entradaCart.map((it, idx) => idx === i ? {...it, costoUsd: val, subtotal: it.cant * val} : it));
+                              }}
+                              className="w-20 text-right border"
+                            />
+                          </td>
+                          <td style={{ textAlign: 'right', fontWeight: 'bold' }}>${item.subtotal.toFixed(2)}</td>
+                          <td style={{ textAlign: 'center' }}>
+                             <button onClick={() => setEntradaCart(entradaCart.filter((_, idx) => idx !== i))} className="text-red-600">🗑️</button>
+                          </td>
+                        </tr>
+                      ))}
+                      {entradaCart.length === 0 && (
+                        <tr><td colSpan={6} style={{ textAlign: 'center', padding: '100px', color: '#808080' }}>No hay items cargados en esta compra</td></tr>
+                      )}
+                   </tbody>
+                </table>
+             </div>
+          </div>
+          <div className="modal-footer" style={{ padding: '15px' }}>
+            <button className="btn" style={{ padding: '8px 25px' }} onClick={onClose}>Cancelar</button>
+            <button 
+              className="btn font-bold flex items-center gap-2" 
+              style={{ background: '#f5f5ff', border: '2px solid #5c5ce0', padding: '8px 25px' }}
+              onClick={handleProcesarEntrada}
+            >
+              <FileText size={16} style={{ color: '#5c5ce0' }}/> PROCESAR ENTRADA
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL AJUSTE INVENTARIO */}
+      {activeModal === 'modalAjuste' && (
         <div className="modal-window" style={{ width: '400px' }} onClick={e => e.stopPropagation()}>
           <div className="modal-titlebar">
-            <span className="flex items-center gap-2">
-              {activeModal === 'modalEntrada' ? <PlusCircle size={16}/> : <RefreshCcw size={16}/>} 
-              {activeModal === 'modalEntrada' ? 'RECEPCIÓN DE MERCANCÍA' : 'AJUSTE DE INVENTARIO'}
-            </span>
+            <span className="flex items-center gap-2"><RefreshCcw size={16}/> AJUSTE DE INVENTARIO</span>
             <span className="modal-close" onClick={onClose}>✕</span>
           </div>
           <div className="modal-body space-y-4">
@@ -498,7 +745,7 @@ export function Modals({
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="form-group">
-                <label>Cantidad:</label>
+                <label>Cantidad (+/-):</label>
                 <input 
                   type="number" 
                   value={inventoryForm.cantidad || ''} 
@@ -524,7 +771,7 @@ export function Modals({
                 value={inventoryForm.referencia} 
                 onChange={e => setInventoryForm({...inventoryForm, referencia: e.target.value})} 
                 className="win-input"
-                placeholder="N° Factura, Compra, etc."
+                placeholder="N° Ajuste, Inventario, etc."
               />
             </div>
             <div className="form-group">
@@ -540,10 +787,10 @@ export function Modals({
           <div className="modal-footer">
             <button className="btn" onClick={onClose}>Cancelar</button>
             <button 
-              className={`btn font-bold ${activeModal === 'modalEntrada' ? 'btn-success' : 'btn-primary'}`}
-              onClick={() => handleInventoryOperation(activeModal === 'modalEntrada' ? 'ENTRADA' : 'AJUSTE')}
+              className="btn font-bold btn-primary"
+              onClick={() => handleInventoryOperation('AJUSTE')}
             >
-              🚀 PROCESAR {activeModal === 'modalEntrada' ? 'ENTRADA' : 'AJUSTE'}
+              🚀 PROCESAR AJUSTE
             </button>
           </div>
         </div>
