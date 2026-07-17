@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -16,9 +15,10 @@ interface PosModuleProps {
   notify: any;
   selectedRow: number;
   setSelectedRow: (idx: number) => void;
+  onLogout: () => void;
 }
 
-export function PosModule({ active, onOpenModal, products, clients, cart, setCart, config, notify, selectedRow, setSelectedRow }: PosModuleProps) {
+export function PosModule({ active, onOpenModal, products, clients, cart, setCart, config, notify, selectedRow, setSelectedRow, onLogout }: PosModuleProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchDropdown, setSearchDropdown] = useState<Product[]>([]);
   const [clientInfo, setClientInfo] = useState({ name: 'Consumidor Final', rif: 'V-00000000-0', saldo: 0 });
@@ -205,7 +205,7 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
           <button className="sidebar-btn" onClick={() => setCart(cart.filter((_, idx) => idx !== selectedRow))}>Eliminar Item</button>
           <button className="sidebar-btn" onClick={() => onOpenModal('modalCliente')}>Devoluciones</button>
           <button className="sidebar-btn" onClick={() => onOpenModal('modalProducto')}>Ver Creditos</button>
-          <button className="sidebar-btn" style={{ marginTop: 'auto', background: '#f0a0a0' }}>SALIR</button>
+          <button className="sidebar-btn" style={{ marginTop: 'auto', background: '#f0a0a0' }} onClick={onLogout}>SALIR</button>
         </div>
       </div>
 

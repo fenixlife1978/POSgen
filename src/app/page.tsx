@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -85,7 +84,8 @@ export default function POSPage() {
           setIsLoggedIn(true);
         }
       } else {
-        // No hay sesión activa
+        setIsLoggedIn(false);
+        setCurrentUser(null);
       }
     });
     return () => unsubscribe();
@@ -302,7 +302,7 @@ export default function POSPage() {
         })}
       </div>
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
-        <PosModule active={activeModule === 'pos'} onOpenModal={openModal} products={products} clients={clients} cart={posCart} setCart={setPosCart} config={config} notify={notify} selectedRow={selectedRow} setSelectedRow={setSelectedRow} />
+        <PosModule active={activeModule === 'pos'} onOpenModal={openModal} products={products} clients={clients} cart={posCart} setCart={setPosCart} config={config} notify={notify} selectedRow={selectedRow} setSelectedRow={setSelectedRow} onLogout={handleLogout} />
         <DashboardModule active={activeModule === 'dashboard'} sales={sales} products={products} config={config} />
         <ProductsModule active={activeModule === 'productos'} onOpenModal={openModal} products={products} tasa={config.tasa} notify={notify} />
         <ClientsModule active={activeModule === 'clientes'} onOpenModal={openModal} clients={clients} setClients={setClients} notify={notify} />
