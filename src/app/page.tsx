@@ -133,7 +133,18 @@ export default function POSPage() {
         <span style={{ marginLeft: 'auto', fontSize: '11px' }}>{config.nombreEmpresa} | {currentUser?.name} ({currentUser?.role}) | Terminal: {config.terminalId}</span>
       </div>
       <div className="nav-tabs">
-        {[{ id: 'pos', label: 'Venta (POS)' }, { id: 'dashboard', label: 'Resumen' }, { id: 'productos', label: 'Productos' }, { id: 'clientes', label: 'Clientes' }, { id: 'ventas', label: 'Historial' }, { id: 'reportes', label: 'Contabilidad' }, { id: 'cuentas', label: 'Cuentas x Cobrar/Pagar' }, { id: 'config', label: 'Ajustes' }].map(m => (
+        {[
+          { id: 'pos', label: 'Venta (POS)' }, 
+          { id: 'dashboard', label: 'Resumen' }, 
+          { id: 'productos', label: 'Productos' }, 
+          { id: 'clientes', label: 'Clientes' }, 
+          { id: 'inventario', label: 'Inventario' },
+          { id: 'ventas', label: 'Historial' }, 
+          { id: 'reportes', label: 'Contabilidad' }, 
+          { id: 'cuentas', label: 'Cuentas x Cobrar/Pagar' }, 
+          { id: 'usuarios', label: 'Usuarios' },
+          { id: 'config', label: 'Ajustes' }
+        ].map(m => (
           <div key={m.id} className={`nav-tab ${activeModule === m.id ? 'active' : ''}`} onClick={() => setActiveModule(m.id)}>{m.label}</div>
         ))}
       </div>
@@ -146,6 +157,7 @@ export default function POSPage() {
         <InventoryModule active={activeModule === 'inventario'} onOpenModal={openModal} products={products} movements={movements} />
         <ReportsModule active={activeModule === 'reportes'} sales={sales} products={products} clients={clients} config={config} setConfig={setConfig} setReportsZ={setReportsZ} reportsZ={reportsZ} onOpenModal={openModal} />
         <AccountsModule active={activeModule === 'cuentas'} accounts={accounts} movements={movements} />
+        <UsersModule active={activeModule === 'usuarios'} users={users} onOpenModal={openModal} />
         <ConfigModule active={activeModule === 'config'} onOpenModal={openModal} config={config} setConfig={setConfig} notify={notify} />
       </div>
       <div className="status-bar">

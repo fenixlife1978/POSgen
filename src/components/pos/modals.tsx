@@ -125,6 +125,10 @@ export function Modals({
       });
     } else if (activeModal === 'modalCliente' && editingId !== null) {
       setClientForm(clients[editingId]);
+    } else if (activeModal === 'modalCliente' && editingId === null) {
+      setClientForm({
+        tipoRif: 'V', rifNum: '', nombre: '', telefono: '', email: '', direccion: '', saldo: 0, tipo: 'Contribuyente'
+      });
     } else if (activeModal === 'modalProveedor' && editingId !== null) {
       const p = providers.find(prov => prov.id === editingId);
       if (p) setProviderForm(p);
@@ -316,7 +320,7 @@ export function Modals({
       terminalId: config.terminalId,
       items: [...cart],
       subtotal: cart.reduce((acc, it) => acc + (it.precioUsd * it.cantidad), 0),
-      iva: cart.reduce((acc, it) => acc + (it.precioUsd * it.cantidad * (it.iva / 100)), 0),
+      iva: cart.reduce((acc, it) => acc + (it.precioUsd * item.cantidad * (it.iva / 100)), 0),
       totalUsd: totalUsd,
       totalBs: totalUsd * config.tasa,
       pago: paymentState.payments.map(p => p.method).join(', ') || (clientInfo.isCredit ? 'CRÉDITO' : 'Contado'),
