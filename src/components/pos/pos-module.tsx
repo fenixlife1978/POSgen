@@ -193,8 +193,8 @@ export function PosModule({ active, onOpenModal, products, clients, cart, setCar
         <div className="right-sidebar">
           <button className="sidebar-btn" onClick={() => onOpenModal('modalConsultar')}>Consultar F2</button>
           <button className="sidebar-btn" onClick={() => setCart(cart.filter((_, idx) => idx !== selectedRow))}>Eliminar Item</button>
-          <button className="sidebar-btn" onClick={() => onOpenModal('modalCliente')}>Nuevo Cliente</button>
-          <button className="sidebar-btn" onClick={() => onOpenModal('modalProducto')}>Nuevo Item</button>
+          <button className="sidebar-btn" onClick={() => onOpenModal('modalCliente')}>Devoluciones</button>
+          <button className="sidebar-btn" onClick={() => onOpenModal('modalProducto')}>Ver Creditos</button>
           <button className="sidebar-btn" style={{ marginTop: 'auto', background: '#f0a0a0' }}>SALIR</button>
         </div>
       </div>
