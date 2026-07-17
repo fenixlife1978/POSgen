@@ -8,10 +8,11 @@ import {
   Wallet, Search, Trash2, Save, CreditCard, UserPlus, 
   Package, UserCircle, Truck, 
   RefreshCcw, DollarSign,
-  PlusCircle, FileText, Plus, Minus, Layers, Wrench, Banknote, History
+  PlusCircle, FileText, Plus, Minus, Layers, Wrench, Banknote, History,
+  ArrowRightLeft, LogOut, ChevronDown, CheckCircle2
 } from 'lucide-react';
 import { db, auth } from '@/lib/firebase';
-import { doc, setDoc, writeBatch, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, writeBatch, updateDoc, collection, onSnapshot, query, where } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 
 interface ModalsProps {
@@ -73,26 +74,27 @@ export function Modals({
   });
 
   const [entradaHeader, setEntradaHeader] = useState({
-    proveedor: '', nroFactura: '', tasaBcv: config.tasa, tipoCompra: 'Mixto', diasCredito: 7, pagoContadoUsd: 0, pagoContadoBs: 0
+    proveedor: '', providerRif: '', nroFactura: '', tasaBcv: config.tasa.toString(), tipoCompra: 'Contado', diasCredito: 7, pagoContadoUsd: '0', pagoContadoBs: '0'
   });
   const [entradaSearch, setEntradaSearch] = useState('');
   const [entradaCart, setEntradaCart] = useState<any[]>([]);
 
   const [inventoryForm, setInventoryForm] = useState({
-    codigo: '', cantidad: 0, costo: 0, referencia: '', comentario: ''
+    codigo: '', cantidad: '0', costo: '0', referencia: '', comentario: '', tipoAjuste: 'Faltante'
   });
 
   const [userForm, setUserForm] = useState({ name: '', email: '', role: 'Cajero', password: '' });
   const [paymentState, setPaymentState] = useState({ method: 'Efectivo USD', amount: 0, payments: [] as any[], totalPaidUsd: 0 });
   const [lastSale, setLastSale] = useState<Sale | null>(null);
 
-  // Apertura de Caja
   const [aperturaMonto, setAperturaMonto] = useState('0');
-
-  // Cobro Deuda
   const [cobroSearch, setCobroSearch] = useState('');
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [montoAbono, setMontoAbono] = useState('0');
+
+  const [gastoForm, setGastoForm] = useState({ concepto: '', monto: '0', referencia: '' });
+  const [trasladoForm, setTrasladoForm] = useState({ banco: '', monto: '0', referencia: '' });
+  const [devForm, setDevForm] = useState({ nroFactura: '', itemIdx: -1, cantidad: 1, condicion: 'REINTEGRADO_STOCK', motivo: '' });
 
   useEffect(() => {
     if (activeModal === 'modalProducto' && editingId !== null) {
@@ -132,159 +134,187 @@ export function Modals({
 
   const handlePriceUpdate = (type: 'margin' | 'usd' | 'bs' | 'cost' | 'iva' | 'exento', rawValue: any) => {
     let newForm = { ...productForm };
-    const numValue = (type === 'iva' || type === 'exento') ? rawValue : parseFloat(rawValue);
-    const costNum = type === 'cost' ? numValue : parseFloat(newForm.costoPromedio);
-    const tasa = config.tasa || 1;
+    const tasa = parseFloat(config.tasa) || 1;
 
     if (type === 'cost') newForm.costoPromedio = rawValue;
     if (type === 'margin') newForm.utilidadPorcentaje = rawValue;
     if (type === 'usd') newForm.precio1 = rawValue;
-    if (type === 'bs') {
-      const usdVal = isNaN(numValue) ? 0 : numValue / tasa;
-      newForm.precio1 = usdVal.toString();
-    }
+    if (type === 'bs') newForm.precio1 = (parseFloat(rawValue) / tasa).toString();
+    if (type === 'exento') { newForm.exento = rawValue; newForm.iva = rawValue ? 0 : 16; }
+    if (type === 'iva') { newForm.iva = rawValue; newForm.exento = rawValue === 0; }
 
-    if (type === 'exento') {
-      newForm.exento = rawValue;
-      newForm.iva = rawValue ? 0 : 16;
-    } else if (type === 'iva') {
-      newForm.iva = rawValue;
-      newForm.exento = rawValue === 0;
-    } else if (!isNaN(numValue) || rawValue === "") {
-      const effectiveNum = isNaN(numValue) ? 0 : numValue;
-      const effectiveCost = isNaN(costNum) ? 0 : costNum;
+    const costNum = parseFloat(newForm.costoPromedio) || 0;
+    const marginNum = (parseFloat(newForm.utilidadPorcentaje) || 0) / 100;
 
-      if (type === 'cost' || type === 'margin' || type === 'usd' || type === 'bs') {
-        const marginNum = parseFloat(newForm.utilidadPorcentaje) / 100;
-        
-        if (type === 'cost') {
-          const p1 = marginNum < 1 ? effectiveNum / (1 - marginNum) : effectiveNum;
-          newForm.precio1 = p1.toFixed(4);
-        } else if (type === 'margin') {
-          const p1 = effectiveNum < 100 ? effectiveCost / (1 - effectiveNum / 100) : effectiveCost;
-          newForm.precio1 = p1.toFixed(4);
-        } else if (type === 'usd') {
-          newForm.utilidadPorcentaje = effectiveNum > 0 ? ((1 - (effectiveCost / effectiveNum)) * 100).toFixed(2) : "0";
-        } else if (type === 'bs') {
-          const usdVal = effectiveNum / tasa;
-          newForm.utilidadPorcentaje = usdVal > 0 ? ((1 - (effectiveCost / usdVal)) * 100).toFixed(2) : "0";
-        }
-      }
+    if (type === 'cost' || type === 'margin') {
+      const p1 = marginNum < 1 ? costNum / (1 - marginNum) : costNum;
+      newForm.precio1 = p1.toFixed(4);
+    } else if (type === 'usd' || type === 'bs') {
+      const p1 = parseFloat(newForm.precio1) || 0;
+      newForm.utilidadPorcentaje = p1 > 0 ? ((1 - (costNum / p1)) * 100).toFixed(2) : "0";
     }
 
     setProductForm(newForm);
   };
 
-  const handleCreateUser = async (e: React.FormEvent) => {
+  const handleProcessEntrada = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, userForm.email, userForm.password);
-      const newUser = userCredential.user;
-      await setDoc(doc(db, 'users', newUser.uid), {
-        id: newUser.uid,
-        name: userForm.name,
-        email: userForm.email,
-        role: userForm.role,
-        active: true
+    if (entradaCart.length === 0) return notify('❌ El carrito de entrada está vacío', 'error');
+    
+    const batch = writeBatch(db);
+    const fecha = new Date().toISOString();
+    const totalUsd = entradaCart.reduce((acc, item) => acc + (item.costo * item.cantidad), 0);
+    const abonoUsd = parseFloat(entradaHeader.pagoContadoUsd) || 0;
+    const tasa = parseFloat(entradaHeader.tasaBcv) || config.tasa;
+
+    // 1. Registro de Movimientos e Inventario
+    for (const item of entradaCart) {
+      const prod = products.find(p => p.codigo === item.codigo);
+      if (prod) {
+        const stockPrev = prod.stock;
+        const newStock = stockPrev + item.cantidad;
+        const newCosto = ((prod.costoPromedio * stockPrev) + (item.costo * item.cantidad)) / newStock;
+        
+        batch.update(doc(db, 'products', prod.codigo), { 
+          stock: newStock, 
+          costoPromedio: newCosto,
+          costoActual: item.costo
+        });
+
+        const logId = uuidv4();
+        batch.set(doc(db, 'inventory_movements', logId), {
+          id: logId, fecha, codigoProducto: prod.codigo, tipo: 'ENTRADA',
+          cantidad: item.cantidad, stockPrevio: stockPrev, stockNuevo: newStock,
+          costo: item.costo, referencia: entradaHeader.nroFactura,
+          comentario: `Compra a proveedor: ${entradaHeader.proveedor}`, usuario: config.vendedor
+        });
+      }
+    }
+
+    // 2. Libro de Caja (Si hubo pago al contado)
+    if (abonoUsd > 0) {
+      const movId = uuidv4();
+      batch.set(doc(db, 'accounting/audit/cash_movements', movId), {
+        id: movId, fecha, tipo: 'EGRESO', montoUsd: abonoUsd, montoBs: abonoUsd * tasa,
+        metodo: 'Efectivo USD', referencia: entradaHeader.nroFactura,
+        concepto: `PAGO COMPRA: ${entradaHeader.proveedor}`, usuario: config.vendedor
       });
-      notify('✅ Usuario creado exitosamente');
-      onClose();
-    } catch (error: any) {
-      notify(`❌ Error: ${error.message}`, 'error');
     }
-  };
 
-  const handleSaveProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const finalProduct = { 
-        ...productForm,
-        costoPromedio: parseFloat(productForm.costoPromedio) || 0,
-        utilidadPorcentaje: parseFloat(productForm.utilidadPorcentaje) || 0,
-        precio1: parseFloat(productForm.precio1) || 0,
-        precio2: parseFloat(productForm.precio2) || 0,
-        precio3: parseFloat(productForm.precio3) || 0,
-        precio4: parseFloat(productForm.precio4) || 0,
-        stock: parseInt(productForm.stock) || 0,
-        stockMin: parseInt(productForm.stockMin) || 0,
-      };
-      await setDoc(doc(db, 'products', finalProduct.codigo), finalProduct);
-      notify('✅ Producto guardado');
-      onClose();
-    } catch (error) {
-      notify('❌ Error al guardar', 'error');
+    // 3. Cuentas por Pagar (CXP)
+    const pendiente = totalUsd - abonoUsd;
+    if (pendiente > 0.0001) {
+      const accId = uuidv4();
+      batch.set(doc(db, 'accounts', accId), {
+        id: accId, entidad: entradaHeader.proveedor, rif: entradaHeader.providerRif,
+        montoTotal: totalUsd, montoPagado: abonoUsd, fechaEmision: fecha,
+        estado: abonoUsd > 0 ? 'Parcial' : 'Pendiente', referencia: entradaHeader.nroFactura, tipo: 'CXP'
+      });
     }
-  };
 
-  const handleSaveClient = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = `${clientForm.tipoRif}-${clientForm.rifNum}`;
-    try {
-      await setDoc(doc(db, 'clients', id), clientForm);
-      notify('✅ Cliente guardado');
-      onClose();
-    } catch (error) {
-      notify('❌ Error al guardar cliente', 'error');
-    }
-  };
-
-  const handleSaveProvider = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const id = providerForm.id || uuidv4();
-      await setDoc(doc(db, 'providers', id), { ...providerForm, id });
-      notify('✅ Proveedor guardado');
-      onClose();
-    } catch (error) {
-      notify('❌ Error al guardar proveedor', 'error');
-    }
-  };
-
-  const handleProcessApertura = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const monto = parseFloat(aperturaMonto) || 0;
-    const movId = uuidv4();
-    const movement: CashMovement = {
-      id: movId,
-      fecha: new Date().toISOString(),
-      tipo: 'INGRESO',
-      montoUsd: monto,
-      montoBs: monto * config.tasa,
-      metodo: 'Efectivo USD',
-      referencia: 'APERTURA',
-      concepto: 'FONDO DE APERTURA DE CAJA',
-      usuario: config.vendedor
-    };
-    await setDoc(doc(db, 'accounting/audit/cash_movements', movId), movement);
-    notify('✅ Apertura de caja registrada');
+    await batch.commit();
+    notify('✅ Entrada por compra procesada exitosamente');
+    setEntradaCart([]);
     onClose();
   };
 
-  const handleProcessCobro = async (e: React.FormEvent) => {
+  const handleProcessAjuste = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAccount) return;
-    const monto = parseFloat(montoAbono) || 0;
+    const prod = products.find(p => p.codigo === inventoryForm.codigo);
+    if (!prod) return notify('❌ Producto no encontrado', 'error');
+
+    const cant = parseInt(inventoryForm.cantidad) || 0;
+    const factor = inventoryForm.tipoAjuste === 'Faltante' ? -1 : 1;
+    const finalQty = cant * factor;
+    
     const batch = writeBatch(db);
     const fecha = new Date().toISOString();
-    
-    // Actualizar Cuenta
-    const nuevoPagado = selectedAccount.montoPagado + monto;
-    const nuevoEstado = nuevoPagado >= selectedAccount.montoTotal ? 'Pagada' : 'Parcial';
-    batch.update(doc(db, 'accounts', selectedAccount.id), {
-      montoPagado: nuevoPagado,
-      estado: nuevoEstado
-    });
+    const newStock = prod.stock + finalQty;
 
-    // Registrar en Caja
-    const movId = uuidv4();
-    batch.set(doc(db, 'accounting/audit/cash_movements', movId), {
-      id: movId, fecha, tipo: 'INGRESO', montoUsd: monto, montoBs: monto * config.tasa,
-      metodo: 'Efectivo USD', referencia: selectedAccount.referencia,
-      concepto: `COBRO DE DEUDA: ${selectedAccount.entidad}`, usuario: config.vendedor
+    batch.update(doc(db, 'products', prod.codigo), { stock: newStock });
+
+    const logId = uuidv4();
+    batch.set(doc(db, 'inventory_movements', logId), {
+      id: logId, fecha, codigoProducto: prod.codigo, tipo: 'AJUSTE',
+      cantidad: finalQty, stockPrevio: prod.stock, stockNuevo: newStock,
+      costo: prod.costoPromedio, referencia: inventoryForm.referencia,
+      comentario: inventoryForm.comentario, usuario: config.vendedor
     });
 
     await batch.commit();
-    notify('✅ Cobro de deuda procesado');
+    notify('✅ Ajuste de inventario registrado');
+    onClose();
+  };
+
+  const handleProcessGasto = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const monto = parseFloat(gastoForm.monto) || 0;
+    const movId = uuidv4();
+    const fecha = new Date().toISOString();
+
+    await setDoc(doc(db, 'accounting/audit/cash_movements', movId), {
+      id: movId, fecha, tipo: 'EGRESO', montoUsd: monto, montoBs: monto * config.tasa,
+      metodo: 'Efectivo USD', referencia: gastoForm.referencia,
+      concepto: `GASTO OPERATIVO: ${gastoForm.concepto}`, usuario: config.vendedor
+    });
+
+    notify('✅ Gasto registrado en libro de caja');
+    onClose();
+  };
+
+  const handleProcessTraslado = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const monto = parseFloat(trasladoForm.monto) || 0;
+    const movId = uuidv4();
+    const fecha = new Date().toISOString();
+
+    await setDoc(doc(db, 'accounting/audit/cash_movements', movId), {
+      id: movId, fecha, tipo: 'EGRESO', montoUsd: monto, montoBs: monto * config.tasa,
+      metodo: 'Traslado Bancario', referencia: trasladoForm.referencia,
+      concepto: `TRASLADO A BANCO: ${trasladoForm.banco}`, usuario: config.vendedor
+    });
+
+    notify('✅ Traslado bancario registrado (Salida de Caja)');
+    onClose();
+  };
+
+  const handleProcessDevolucion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const sale = sales.find(s => s.numero === devForm.nroFactura);
+    if (!sale) return notify('❌ Factura no encontrada', 'error');
+
+    const batch = writeBatch(db);
+    const fecha = new Date().toISOString();
+    
+    // Si es anulación total
+    if (devForm.itemIdx === -1) {
+      for (const item of sale.items) {
+        const prod = products.find(p => p.codigo === item.codigo);
+        if (prod) {
+          const newStock = prod.stock + item.cantidad;
+          batch.update(doc(db, 'products', prod.codigo), { stock: newStock });
+          const logId = uuidv4();
+          batch.set(doc(db, 'inventory_movements', logId), {
+            id: logId, fecha, codigoProducto: prod.codigo, tipo: 'DEVOLUCION',
+            cantidad: item.cantidad, stockPrevio: prod.stock, stockNuevo: newStock,
+            costo: prod.costoPromedio, referencia: sale.numero,
+            comentario: 'Anulación total de factura', usuario: config.vendedor
+          });
+        }
+      }
+      batch.update(doc(db, 'sales', sale.numero), { estado: 'Anulada' });
+      
+      // Egreso si se devuelve efectivo
+      const movId = uuidv4();
+      batch.set(doc(db, 'accounting/audit/cash_movements', movId), {
+        id: movId, fecha, tipo: 'EGRESO', montoUsd: sale.totalUsd, montoBs: sale.totalBs,
+        metodo: 'Efectivo USD', referencia: sale.numero,
+        concepto: `REEMBOLSO ANULACION FACTURA ${sale.numero}`, usuario: config.vendedor
+      });
+    }
+
+    await batch.commit();
+    notify('✅ Devolución/Anulación procesada');
     onClose();
   };
 
@@ -315,9 +345,8 @@ export function Modals({
       estado: 'Completada'
     };
 
-    batch.set(doc(db, 'sales', saleId), sale);
+    batch.set(doc(db, 'sales', sale.numero), sale);
     
-    // Registrar ingreso en Caja si hubo pago parcial o total
     if (paymentState.totalPaidUsd > 0) {
       const movId = uuidv4();
       batch.set(doc(db, 'accounting/audit/cash_movements', movId), {
@@ -327,7 +356,6 @@ export function Modals({
       });
     }
 
-    // Crear CXC si queda saldo pendiente
     const saldoPendiente = totalUsd - paymentState.totalPaidUsd;
     if (saldoPendiente > 0.001) {
       const accId = uuidv4();
@@ -339,7 +367,6 @@ export function Modals({
       });
     }
 
-    // Actualizar Stock y Registrar Movimientos en colección global plana
     for (const item of cart) {
       const product = products[item.productIndex];
       if (item.isKit && !item.stockPropio) {
@@ -349,76 +376,42 @@ export function Modals({
             const qtyToDeduct = comp.cantidad * item.cantidad;
             const newStock = compProd.stock - qtyToDeduct;
             batch.update(doc(db, 'products', compProd.codigo), { stock: newStock });
-            
             const logId = uuidv4();
             batch.set(doc(db, 'inventory_movements', logId), {
-              id: logId, 
-              fecha, 
-              codigoProducto: compProd.codigo, 
-              tipo: 'VENTA', 
-              cantidad: -qtyToDeduct, 
-              stockPrevio: compProd.stock, 
-              stockNuevo: newStock, 
-              costo: compProd.costoPromedio, 
-              referencia: `${sale.numero} (KIT)`, 
-              usuario: config.vendedor,
-              comentario: `Venta por combo: ${product.nombre}`
+              id: logId, fecha, codigoProducto: compProd.codigo, tipo: 'VENTA',
+              cantidad: -qtyToDeduct, stockPrevio: compProd.stock, stockNuevo: newStock,
+              costo: compProd.costoPromedio, referencia: `${sale.numero} (KIT)`, 
+              usuario: config.vendedor, comentario: `Venta por combo: ${product.nombre}`
             });
           }
         }
       } else if (!product.isService) {
         const newStock = product.stock - item.cantidad;
         batch.update(doc(db, 'products', product.codigo), { stock: newStock });
-        
         const logId = uuidv4();
         batch.set(doc(db, 'inventory_movements', logId), {
-          id: logId, 
-          fecha, 
-          codigoProducto: product.codigo, 
-          tipo: 'VENTA', 
-          cantidad: -item.cantidad, 
-          stockPrevio: product.stock, 
-          stockNuevo: newStock, 
-          costo: product.costoPromedio, 
-          referencia: sale.numero, 
-          usuario: config.vendedor,
-          comentario: `Venta directa`
+          id: logId, fecha, codigoProducto: product.codigo, tipo: 'VENTA',
+          cantidad: -item.cantidad, stockPrevio: product.stock, stockNuevo: newStock,
+          costo: product.costoPromedio, referencia: sale.numero, 
+          usuario: config.vendedor, comentario: `Venta directa`
         });
       }
     }
     await batch.commit();
     setLastSale(sale);
     setCart([]);
-    notify('✅ Flujo de venta y contabilidad procesado');
+    notify('✅ Flujo de venta procesado');
     onClose();
   };
 
-  const handleEntradaPayment = (type: 'usd' | 'bs', value: number) => {
-    const tasa = entradaHeader.tasaBcv || 1;
+  const handleEntradaPayment = (type: 'usd' | 'bs', value: string) => {
+    const tasa = parseFloat(entradaHeader.tasaBcv) || 1;
+    const numVal = parseFloat(value) || 0;
     if (type === 'usd') {
-      setEntradaHeader({
-        ...entradaHeader,
-        pagoContadoUsd: value,
-        pagoContadoBs: Number((value * tasa).toFixed(2))
-      });
+      setEntradaHeader({ ...entradaHeader, pagoContadoUsd: value, pagoContadoBs: (numVal * tasa).toFixed(2) });
     } else {
-      setEntradaHeader({
-        ...entradaHeader,
-        pagoContadoBs: value,
-        pagoContadoUsd: Number((value / tasa).toFixed(4))
-      });
+      setEntradaHeader({ ...entradaHeader, pagoContadoBs: value, pagoContadoUsd: (numVal / tasa).toFixed(4) });
     }
-  };
-
-  const addToKit = (product: Product) => {
-    if (product.codigo === productForm.codigo) return notify('❌ No puede agregarse a sí mismo', 'error');
-    const existing = productForm.kitComponents.find((c: any) => c.codigo === product.codigo);
-    if (existing) return;
-    setProductForm({
-      ...productForm,
-      kitComponents: [...productForm.kitComponents, { codigo: product.codigo, cantidad: 1 }]
-    });
-    setKitSearch('');
   };
 
   if (!activeModal && !lastSale) return null;
@@ -426,6 +419,251 @@ export function Modals({
   return (
     <div className="modal-overlay active" onClick={() => { if(!lastSale) onClose(); else setLastSale(null); }}>
       
+      {activeModal === 'modalEntrada' && (
+        <div className="modal-window xlarge" style={{ width: '900px' }} onClick={e => e.stopPropagation()}>
+          <div className="win-titlebar">
+            <span className="flex items-center gap-2"><Truck size={14}/> RECEPCIÓN DE INVENTARIO / COMPRA</span>
+            <span className="modal-close" onClick={onClose}></span>
+          </div>
+          <form onSubmit={handleProcessEntrada}>
+            <div className="modal-body space-y-6">
+              <div className="grid grid-cols-4 gap-4 bg-gray-200 p-4 border border-gray-400">
+                <div className="form-group">
+                  <label className="font-bold">Proveedor:</label>
+                  <select className="win-input" required value={entradaHeader.proveedor} onChange={e => {
+                    const p = providers.find(pr => pr.nombre === e.target.value);
+                    setEntradaHeader({...entradaHeader, proveedor: e.target.value, providerRif: p?.rif || ''});
+                  }}>
+                    <option value="">-- Seleccionar --</option>
+                    {providers.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="font-bold">Factura N°:</label>
+                  <input type="text" required className="win-input" value={entradaHeader.nroFactura} onChange={e => setEntradaHeader({...entradaHeader, nroFactura: e.target.value})} />
+                </div>
+                <div className="form-group">
+                  <label className="font-bold text-blue-800">Tasa Aplicada:</label>
+                  <input type="text" className="win-input font-bold" value={entradaHeader.tasaBcv} onChange={e => setEntradaHeader({...entradaHeader, tasaBcv: e.target.value})} />
+                </div>
+                <div className="form-group">
+                  <label className="font-bold">Condición:</label>
+                  <select className="win-input" value={entradaHeader.tipoCompra} onChange={e => setEntradaHeader({...entradaHeader, tipoCompra: e.target.value})}>
+                    <option value="Contado">Contado (Libro Caja)</option>
+                    <option value="Credito">Crédito (Libro CXP)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="relative">
+                <input type="text" placeholder="🔍 Buscar producto para agregar a la compra..." className="win-input w-full h-10 px-4" value={entradaSearch} onChange={e => setEntradaSearch(e.target.value)} />
+                {entradaSearch && (
+                  <div className="search-dropdown active w-full">
+                    {products.filter(p => !p.isService && (p.codigo.toLowerCase().includes(entradaSearch.toLowerCase()) || p.nombre.toLowerCase().includes(entradaSearch.toLowerCase()))).map(p => (
+                      <div key={p.codigo} className="search-dropdown-item" onClick={() => {
+                        setEntradaCart([...entradaCart, { codigo: p.codigo, nombre: p.nombre, cantidad: 1, costo: p.costoPromedio }]);
+                        setEntradaSearch('');
+                      }}>
+                        {p.codigo} - {p.nombre} | Costo Actual: ${p.costoPromedio.toFixed(4)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="table-responsive h-48 bg-white">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Descripción</th>
+                      <th style={{ textAlign: 'center' }}>Cant. Recibida</th>
+                      <th style={{ textAlign: 'right' }}>Costo USD Unit.</th>
+                      <th style={{ textAlign: 'right' }}>Total Item</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {entradaCart.map((item, idx) => (
+                      <tr key={idx}>
+                        <td>{item.codigo}</td>
+                        <td>{item.nombre}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <input type="number" className="w-20 text-center" value={item.cantidad} onChange={e => {
+                            const newCart = [...entradaCart];
+                            newCart[idx].cantidad = parseInt(e.target.value) || 0;
+                            setEntradaCart(newCart);
+                          }} />
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <input type="text" className="w-24 text-right" value={item.costo} onChange={e => {
+                            const newCart = [...entradaCart];
+                            newCart[idx].costo = parseFloat(e.target.value) || 0;
+                            setEntradaCart(newCart);
+                          }} />
+                        </td>
+                        <td style={{ textAlign: 'right' }}>${(item.cantidad * item.costo).toFixed(4)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="grid grid-cols-4 gap-4">
+                <div className="dash-card bg-black text-yellow-400">
+                  <div className="dash-value">${entradaCart.reduce((s, i) => s + (i.cantidad * i.costo), 0).toFixed(4)}</div>
+                  <div className="dash-label">TOTAL FACTURA USD</div>
+                </div>
+                <div className="dash-card bg-blue-900 text-white">
+                  <div className="dash-value">Bs. {(entradaCart.reduce((s, i) => s + (i.cantidad * i.costo), 0) * (parseFloat(entradaHeader.tasaBcv) || 1)).toFixed(2)}</div>
+                  <div className="dash-label">EQUIV. BS.</div>
+                </div>
+                <div className="dash-card bg-emerald-800 text-white">
+                   <input type="text" className="bg-transparent border-none text-center text-xl font-bold w-full outline-none" value={entradaHeader.pagoContadoUsd} onChange={e => handleEntradaPayment('usd', e.target.value)} />
+                   <div className="dash-label">TOTAL PAGADO USD</div>
+                </div>
+                <div className="dash-card bg-red-900 text-white">
+                   <div className="dash-value">${Math.max(0, entradaCart.reduce((s, i) => s + (i.cantidad * i.costo), 0) - (parseFloat(entradaHeader.pagoContadoUsd) || 0)).toFixed(4)}</div>
+                   <div className="dash-label">PENDIENTE USD (CRÉDITO)</div>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn" onClick={() => onOpenModal('modalProducto')}>➕ Nueva Ficha</button>
+              <button type="button" className="btn ml-auto" onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn btn-primary font-black px-8">REGISTRAR COMPRA</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {activeModal === 'modalAjuste' && (
+        <div className="modal-window" style={{ width: '400px' }} onClick={e => e.stopPropagation()}>
+          <div className="win-titlebar">
+            <span className="flex items-center gap-2"><RefreshCcw size={14}/> AJUSTE TÉCNICO DE INVENTARIO</span>
+            <span className="modal-close" onClick={onClose}></span>
+          </div>
+          <form onSubmit={handleProcessAjuste}>
+            <div className="modal-body space-y-4">
+              <div className="form-group">
+                <label>Producto:</label>
+                <select className="win-input" required value={inventoryForm.codigo} onChange={e => setInventoryForm({...inventoryForm, codigo: e.target.value})}>
+                  <option value="">-- Seleccionar --</option>
+                  {products.filter(p => !p.isService).map(p => <option key={p.codigo} value={p.codigo}>{p.codigo} - {p.nombre}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="form-group">
+                  <label>Tipo Ajuste:</label>
+                  <select className="win-input" value={inventoryForm.tipoAjuste} onChange={e => setInventoryForm({...inventoryForm, tipoAjuste: e.target.value})}>
+                    <option value="Faltante">📉 Faltante (Gasto Merma)</option>
+                    <option value="Sobrante">📈 Sobrante (Ingreso Extra)</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Cantidad:</label>
+                  <input type="text" className="win-input" required value={inventoryForm.cantidad} onChange={e => setInventoryForm({...inventoryForm, cantidad: e.target.value})} />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Motivo / Comentario:</label>
+                <textarea className="win-input h-20" required value={inventoryForm.comentario} onChange={e => setInventoryForm({...inventoryForm, comentario: e.target.value})} />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn btn-primary font-bold">APLICAR AJUSTE</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {activeModal === 'modalGasto' && (
+        <div className="modal-window" style={{ width: '350px' }} onClick={e => e.stopPropagation()}>
+          <div className="win-titlebar">
+            <span className="flex items-center gap-2"><DollarSign size={14}/> REGISTRO DE GASTO OPERATIVO</span>
+            <span className="modal-close" onClick={onClose}></span>
+          </div>
+          <form onSubmit={handleProcessGasto}>
+            <div className="modal-body space-y-4">
+              <div className="form-group">
+                <label>Concepto del Gasto:</label>
+                <input type="text" className="win-input" required placeholder="Ej: Pago de Electricidad" value={gastoForm.concepto} onChange={e => setGastoForm({...gastoForm, concepto: e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label>Monto USD:</label>
+                <input type="text" className="win-input font-bold text-red-600" required value={gastoForm.monto} onChange={e => setGastoForm({...gastoForm, monto: e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label>N° Comprobante:</label>
+                <input type="text" className="win-input" value={gastoForm.referencia} onChange={e => setGastoForm({...gastoForm, referencia: e.target.value})} />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn btn-primary font-bold">REGISTRAR EGRESO</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {activeModal === 'modalTraslado' && (
+        <div className="modal-window" style={{ width: '350px' }} onClick={e => e.stopPropagation()}>
+          <div className="win-titlebar">
+            <span className="flex items-center gap-2"><ArrowRightLeft size={14}/> TRASLADO BANCARIO (DEPÓSITO)</span>
+            <span className="modal-close" onClick={onClose}></span>
+          </div>
+          <form onSubmit={handleProcessTraslado}>
+            <div className="modal-body space-y-4">
+              <div className="form-group">
+                <label>Banco Destino:</label>
+                <input type="text" className="win-input" required placeholder="Ej: Banesco" value={trasladoForm.banco} onChange={e => setTrasladoForm({...trasladoForm, banco: e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label>Monto a Retirar:</label>
+                <input type="text" className="win-input font-bold" required value={trasladoForm.monto} onChange={e => setTrasladoForm({...trasladoForm, monto: e.target.value})} />
+              </div>
+              <div className="form-group">
+                <label>N° Referencia Depósito:</label>
+                <input type="text" className="win-input" value={trasladoForm.referencia} onChange={e => setTrasladoForm({...trasladoForm, referencia: e.target.value})} />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn btn-primary font-bold">CONFIRMAR TRASLADO</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {activeModal === 'modalDevolucion' && (
+        <div className="modal-window" style={{ width: '450px' }} onClick={e => e.stopPropagation()}>
+          <div className="win-titlebar">
+            <span className="flex items-center gap-2"><History size={14}/> PROCESAR DEVOLUCIÓN DE CLIENTE</span>
+            <span className="modal-close" onClick={onClose}></span>
+          </div>
+          <form onSubmit={handleProcessDevolucion}>
+            <div className="modal-body space-y-4">
+              <div className="form-group">
+                <label>N° Factura:</label>
+                <input type="text" className="win-input font-bold" required value={devForm.nroFactura} onChange={e => setDevForm({...devForm, nroFactura: e.target.value.toUpperCase()})} />
+              </div>
+              <div className="form-group">
+                <label>Acción de Stock:</label>
+                <select className="win-input" value={devForm.condicion} onChange={e => setDevForm({...devForm, condicion: e.target.value})}>
+                  <option value="REINTEGRADO_STOCK">✅ Reingresar al Inventario</option>
+                  <option value="MERMA_DANADO">❌ Mercancía Dañada (Merma)</option>
+                </select>
+              </div>
+              <p className="text-[10px] text-gray-500 font-bold italic">Nota: Al procesar la devolución, se generará un EGRESO en el libro de caja por el monto total de la factura reembolsada.</p>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn btn-primary font-black px-8">EJECUTAR DEVOLUCIÓN</button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {activeModal === 'modalAperturaCaja' && (
         <div className="modal-window" style={{ width: '350px' }} onClick={e => e.stopPropagation()}>
           <div className="win-titlebar">

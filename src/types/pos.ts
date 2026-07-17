@@ -96,7 +96,7 @@ export interface Sale {
   cambioUsd: number;
   referencia: string;
   credito: boolean;
-  estado: 'Completada' | 'Anulada';
+  estado: 'Completada' | 'Anulada' | 'Devuelta';
   detallesPago?: { method: string, usd: number, bs: number }[];
 }
 
@@ -122,7 +122,7 @@ export interface User {
   active: boolean;
 }
 
-export type MovementType = 'ENTRADA' | 'SALIDA' | 'AJUSTE' | 'VENTA' | 'ANULACION';
+export type MovementType = 'ENTRADA' | 'SALIDA' | 'AJUSTE' | 'VENTA' | 'ANULACION' | 'DEVOLUCION';
 
 export interface InventoryMovement {
   id: string;
@@ -163,6 +163,8 @@ export interface ReportZRecord {
   igtfTotal: number;
   exentoTotal: number;
   anulaciones: number;
+  gastosTotal: number;
+  trasladosTotal: number;
   grandTotalAcumulado: number;
   desglosePagos: { method: string, usd: number, bs: number }[];
 }

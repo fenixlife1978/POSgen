@@ -28,7 +28,6 @@ export default function POSPage() {
   const [modalStack, setModalStack] = useState<string[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   
-  // App State
   const [products, setProducts] = useState<Product[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -41,26 +40,21 @@ export default function POSPage() {
   const [selectedRow, setSelectedRow] = useState(-1);
   const [editingId, setEditingId] = useState<any>(null);
 
-  // POS Metadata
   const [clientInfo, setClientInfo] = useState({ name: 'Consumidor Final', rif: 'V-00000000-0', saldo: 0, isCredit: false });
 
   const [config, setConfig] = useState({
-    tasa: 36.50,
-    igtf: 3,
-    iva: 16,
-    rifEmpresa: 'J-12345678-9',
-    nombreEmpresa: 'AUTOPARTS POS PRO',
-    direccion: 'Av. Principal Local 10, Caracas',
-    telefono: '0412-0000000',
-    vendedor: 'ADMIN',
-    vVendedores: ['ADMIN'],
-    reportZCounter: 1,
-    grandTotalHistory: 0,
-    lastZDate: null as string | null,
-    terminalId: 'CAJA-01'
+    tasa: 36.50, igtf: 3, iva: 16, rifEmpresa: 'J-12345678-9',
+    nombreEmpresa: 'AUTOPARTS POS PRO', direccion: 'Av. Principal Local 10, Caracas',
+    telefono: '0412-0000000', vendedor: 'ADMIN', vVendedores: ['ADMIN'],
+    reportZCounter: 1, grandTotalHistory: 0, lastZDate: null as string | null, terminalId: 'CAJA-01'
   });
 
-  // Suscripción al estado de Auth
+  useEffect(() => {
+    const handler = (e: any) => openModal(e.detail);
+    window.addEventListener('openModal', handler);
+    return () => window.removeEventListener('openModal', handler);
+  }, []);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -72,106 +66,47 @@ export default function POSPage() {
             setConfig(prev => ({ ...prev, vendedor: userData.name || user.email || 'OPERADOR' }));
             setIsLoggedIn(true);
           } else {
-            const fallbackAdmin = { id: user.uid, email: user.email, role: 'Administrador', name: 'Admin de Arranque', active: true };
-            setCurrentUser(fallbackAdmin);
-            setConfig(prev => ({ ...prev, vendedor: 'ADMIN' }));
+            setCurrentUser({ id: user.uid, email: user.email, role: 'Administrador', name: 'Admin Cloud' });
             setIsLoggedIn(true);
           }
-        } catch (error) {
-          setIsLoggedIn(true);
-        }
-      } else {
-        setIsLoggedIn(false);
-        setCurrentUser(null);
-      }
+        } catch (error) { setIsLoggedIn(true); }
+      } else { setIsLoggedIn(false); setCurrentUser(null); }
     });
     return () => unsubscribe();
   }, []);
 
-  // Suscripción optimizada a Firestore
   useEffect(() => {
     if (!isLoggedIn) return;
-
-    const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
-      setProducts(snapshot.docs.map(doc => doc.data() as Product));
-    });
-    const unsubClients = onSnapshot(collection(db, 'clients'), (snapshot) => {
-      setClients(snapshot.docs.map(doc => doc.data() as Client));
-    });
-    const unsubProviders = onSnapshot(collection(db, 'providers'), (snapshot) => {
-      setProviders(snapshot.docs.map(doc => doc.data() as Provider));
-    });
-    const unsubSales = onSnapshot(query(collection(db, 'sales'), orderBy('fecha', 'desc'), limit(100)), (snapshot) => {
-      setSales(snapshot.docs.map(doc => doc.data() as Sale));
-    });
-    const unsubAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {
-      setAccounts(snapshot.docs.map(doc => doc.data() as Account));
-    });
-    const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-      setUsers(snapshot.docs.map(doc => doc.data() as User));
-    });
-    const unsubConfig = onSnapshot(doc(db, 'system', 'config'), (snapshot) => {
-      if (snapshot.exists()) setConfig(snapshot.data() as any);
-    });
-    const unsubReportsZ = onSnapshot(collection(db, 'accounting/audit/reportsZ'), (snapshot) => {
-      setReportsZ(snapshot.docs.map(doc => doc.data() as ReportZRecord));
-    });
-
-    // Cambiado de collectionGroup a collection plana para evitar errores de índices complejos
-    const unsubMovements = onSnapshot(
-      query(collection(db, 'inventory_movements'), orderBy('fecha', 'desc'), limit(200)), 
-      (snapshot) => setMovements(snapshot.docs.map(doc => doc.data() as InventoryMovement)),
-      (error) => console.error("Error logs:", error)
-    );
-
+    const unsubProducts = onSnapshot(collection(db, 'products'), (s) => setProducts(s.docs.map(d => d.data() as Product)));
+    const unsubClients = onSnapshot(collection(db, 'clients'), (s) => setClients(s.docs.map(d => d.data() as Client)));
+    const unsubProviders = onSnapshot(collection(db, 'providers'), (s) => setProviders(s.docs.map(d => d.data() as Provider)));
+    const unsubSales = onSnapshot(query(collection(db, 'sales'), orderBy('fecha', 'desc'), limit(100)), (s) => setSales(s.docs.map(d => d.data() as Sale)));
+    const unsubAccounts = onSnapshot(collection(db, 'accounts'), (s) => setAccounts(s.docs.map(d => d.data() as Account)));
+    const unsubUsers = onSnapshot(collection(db, 'users'), (s) => setUsers(s.docs.map(d => d.data() as User)));
+    const unsubConfig = onSnapshot(doc(db, 'system', 'config'), (s) => s.exists() && setConfig(s.data() as any));
+    const unsubReportsZ = onSnapshot(collection(db, 'accounting/audit/reportsZ'), (s) => setReportsZ(s.docs.map(d => d.data() as ReportZRecord)));
+    const unsubMovements = onSnapshot(query(collection(db, 'inventory_movements'), orderBy('fecha', 'desc'), limit(200)), (s) => setMovements(s.docs.map(d => d.data() as InventoryMovement)));
     setIsLoaded(true);
-    return () => {
-      unsubProducts(); unsubClients(); unsubProviders(); unsubSales();
-      unsubAccounts(); unsubUsers(); unsubMovements(); unsubReportsZ(); unsubConfig();
-    };
+    return () => { unsubProducts(); unsubClients(); unsubProviders(); unsubSales(); unsubAccounts(); unsubUsers(); unsubMovements(); unsubReportsZ(); unsubConfig(); };
   }, [isLoggedIn]);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await signInWithEmailAndPassword(auth, loginData.email.trim(), loginData.password);
-    } catch (error) {
-      if (loginData.email === 'admin@sistema.com' && loginData.password === '123') {
-        setCurrentUser({ id: 'EMERGENCY', name: 'Admin Emergencia', role: 'Administrador', active: true });
-        setIsLoggedIn(true);
-      }
-    }
-  };
-
-  const handleLogout = async () => {
-    await signOut(auth);
-    setIsLoggedIn(false);
-  };
+  const handleLogout = async () => { await signOut(auth); setIsLoggedIn(false); };
 
   const notify = (msg: string, type: 'success' | 'error' | 'warning' = 'success') => {
     const el = document.getElementById('notification');
-    if (el) {
-      el.textContent = msg;
-      el.className = `notification show ${type}`;
-      setTimeout(() => el.className = 'notification', 3500);
-    }
+    if (el) { el.textContent = msg; el.className = `notification show ${type}`; setTimeout(() => el.className = 'notification', 3500); }
   };
 
   const openModal = (id: string, dataId?: any) => {
     if (activeModal && activeModal !== id) setModalStack(prev => [...prev, activeModal]);
-    setEditingId(dataId || null);
-    setActiveModal(id);
+    setEditingId(dataId || null); setActiveModal(id);
   };
   
   const closeModal = () => {
     if (modalStack.length > 0) {
       const prev = modalStack[modalStack.length - 1];
-      setModalStack(prevStack => prevStack.slice(0, -1));
-      setActiveModal(prev);
-    } else {
-      setActiveModal(null);
-      setEditingId(null);
-    }
+      setModalStack(prevStack => prevStack.slice(0, -1)); setActiveModal(prev);
+    } else { setActiveModal(null); setEditingId(null); }
   };
 
   if (!isLoggedIn) {
@@ -179,15 +114,8 @@ export default function POSPage() {
       <div className="login-screen">
         <div className="login-box">
           <div className="login-title">Autoparts POS - Repuestos y Lubricantes</div>
-          <form onSubmit={handleLogin}>
-            <div className="form-group"><label>Email:</label><input type="email" required value={loginData.email} onChange={e => setLoginData({...loginData, email: e.target.value})} className="win-input" autoFocus /></div>
-            <div className="form-group">
-              <label>Rol:</label>
-              <select value={loginData.role} onChange={e => setLoginData({...loginData, role: e.target.value})} className="win-input font-bold">
-                <option value="Administrador">Administrador</option>
-                <option value="Cajero">Cajero</option>
-              </select>
-            </div>
+          <form onSubmit={async (e) => { e.preventDefault(); try { await signInWithEmailAndPassword(auth, loginData.email, loginData.password); } catch(e) { notify('Error de acceso', 'error'); } }}>
+            <div className="form-group"><label>Email:</label><input type="email" required value={loginData.email} onChange={e => setLoginData({...loginData, email: e.target.value})} className="win-input" /></div>
             <div className="form-group"><label>Clave:</label><input type="password" required value={loginData.password} onChange={e => setLoginData({...loginData, password: e.target.value})} className="win-input" /></div>
             <div style={{ marginTop: '20px', textAlign: 'right' }}><button type="submit" className="btn btn-primary">Entrar al Sistema</button></div>
           </form>
@@ -205,19 +133,8 @@ export default function POSPage() {
         <span style={{ marginLeft: 'auto', fontSize: '11px' }}>{config.nombreEmpresa} | {currentUser?.name} ({currentUser?.role})</span>
       </div>
       <div className="nav-tabs">
-        {[
-          { id: 'pos', label: 'Venta (POS)' },
-          { id: 'dashboard', label: 'Resumen' },
-          { id: 'productos', label: 'Repuestos' },
-          { id: 'clientes', label: 'Clientes' },
-          { id: 'ventas', label: 'Historial' },
-          { id: 'reportes', label: 'Contabilidad' },
-          { id: 'cuentas', label: 'Cuentas x Cobrar' },
-          { id: 'config', label: 'Ajustes' }
-        ].map(m => (
-          <div key={m.id} className={`nav-tab ${activeModule === m.id ? 'active' : ''}`} onClick={() => setActiveModule(m.id)}>
-            {m.label}
-          </div>
+        {[{ id: 'pos', label: 'Venta (POS)' }, { id: 'dashboard', label: 'Resumen' }, { id: 'productos', label: 'Repuestos' }, { id: 'clientes', label: 'Clientes' }, { id: 'ventas', label: 'Historial' }, { id: 'reportes', label: 'Contabilidad' }, { id: 'cuentas', label: 'Cuentas x Cobrar/Pagar' }, { id: 'config', label: 'Ajustes' }].map(m => (
+          <div key={m.id} className={`nav-tab ${activeModule === m.id ? 'active' : ''}`} onClick={() => setActiveModule(m.id)}>{m.label}</div>
         ))}
       </div>
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
@@ -233,7 +150,7 @@ export default function POSPage() {
       </div>
       <div className="status-bar">
         <span> Tasa actual: {config.tasa}</span>
-        <button onClick={handleLogout} style={{ border:'none', background:'none', color:'red', cursor:'pointer', fontSize:'11px'}}>CERRAR SESIÓN</button>
+        <button onClick={() => openModal('modalDevolucion')} style={{ border:'none', background:'none', color:'#000080', cursor:'pointer', fontSize:'11px', marginLeft:'12px'}}>PROCESAR DEVOLUCIÓN</button>
         <span style={{marginLeft:'auto'}}> CLOUD SYNC OK</span>
       </div>
       <Modals 
