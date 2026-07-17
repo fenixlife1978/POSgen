@@ -339,7 +339,7 @@ export function Modals({
       });
     }
 
-    // Actualizar Stock
+    // Actualizar Stock y Registrar Movimientos en colección global plana
     for (const item of cart) {
       const product = products[item.productIndex];
       if (item.isKit && !item.stockPropio) {
@@ -349,22 +349,40 @@ export function Modals({
             const qtyToDeduct = comp.cantidad * item.cantidad;
             const newStock = compProd.stock - qtyToDeduct;
             batch.update(doc(db, 'products', compProd.codigo), { stock: newStock });
+            
             const logId = uuidv4();
-            batch.set(doc(db, `products/${compProd.codigo}/logs`, logId), {
-              id: logId, fecha, codigoProducto: compProd.codigo, tipo: 'VENTA', 
-              cantidad: -qtyToDeduct, stockPrevio: compProd.stock, stockNuevo: newStock, 
-              costo: compProd.costoPromedio, referencia: `${sale.numero} (KIT)`, usuario: config.vendedor
+            batch.set(doc(db, 'inventory_movements', logId), {
+              id: logId, 
+              fecha, 
+              codigoProducto: compProd.codigo, 
+              tipo: 'VENTA', 
+              cantidad: -qtyToDeduct, 
+              stockPrevio: compProd.stock, 
+              stockNuevo: newStock, 
+              costo: compProd.costoPromedio, 
+              referencia: `${sale.numero} (KIT)`, 
+              usuario: config.vendedor,
+              comentario: `Venta por combo: ${product.nombre}`
             });
           }
         }
       } else if (!product.isService) {
         const newStock = product.stock - item.cantidad;
         batch.update(doc(db, 'products', product.codigo), { stock: newStock });
+        
         const logId = uuidv4();
-        batch.set(doc(db, `products/${product.codigo}/logs`, logId), {
-          id: logId, fecha, codigoProducto: product.codigo, tipo: 'VENTA', 
-          cantidad: -item.cantidad, stockPrevio: product.stock, stockNuevo: newStock, 
-          costo: product.costoPromedio, referencia: sale.numero, usuario: config.vendedor
+        batch.set(doc(db, 'inventory_movements', logId), {
+          id: logId, 
+          fecha, 
+          codigoProducto: product.codigo, 
+          tipo: 'VENTA', 
+          cantidad: -item.cantidad, 
+          stockPrevio: product.stock, 
+          stockNuevo: newStock, 
+          costo: product.costoPromedio, 
+          referencia: sale.numero, 
+          usuario: config.vendedor,
+          comentario: `Venta directa`
         });
       }
     }
@@ -581,8 +599,10 @@ export function Modals({
               </div>
             </div>
             <div className="modal-footer">
-              <button type="button" className="btn" onClick={onClose}>Cancelar</button>
-              <button type="submit" className="btn btn-primary font-bold">GUARDAR FICHA</button>
+              <button type="button" className="btn px-8" onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn btn-primary px-8 font-bold flex items-center gap-2">
+                <Save size={14} /> GUARDAR FICHA MAESTRA
+              </button>
             </div>
           </form>
         </div>
@@ -672,6 +692,47 @@ export function Modals({
               <button type="button" className="btn w-full py-2" onClick={() => setLastSale(null)}>CERRAR</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {activeModal === 'modalProveedor' && (
+        <div className="modal-window large" onClick={e => e.stopPropagation()} style={{ width: '600px' }}>
+          <div className="win-titlebar">
+            <span className="flex items-center gap-2"><Truck size={14}/> FICHA DE PROVEEDOR</span>
+            <span className="modal-close" onClick={onClose}></span>
+          </div>
+          <form onSubmit={handleSaveProvider}>
+            <div className="modal-body space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="form-group">
+                  <label className="font-bold">RIF / Documento:</label>
+                  <input type="text" required value={providerForm.rif} onChange={e => setProviderForm({...providerForm, rif: e.target.value.toUpperCase()})} className="win-input" />
+                </div>
+                <div className="form-group">
+                  <label className="font-bold">Razón Social:</label>
+                  <input type="text" required value={providerForm.nombre} onChange={e => setProviderForm({...providerForm, nombre: e.target.value})} className="win-input" />
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="font-bold">Dirección Fiscal:</label>
+                <input type="text" value={providerForm.direccion} onChange={e => setProviderForm({...providerForm, direccion: e.target.value})} className="win-input" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="form-group">
+                  <label className="font-bold">Contacto:</label>
+                  <input type="text" value={providerForm.contacto} onChange={e => setProviderForm({...providerForm, contacto: e.target.value})} className="win-input" />
+                </div>
+                <div className="form-group">
+                  <label className="font-bold">Teléfono:</label>
+                  <input type="text" value={providerForm.telefono} onChange={e => setProviderForm({...providerForm, telefono: e.target.value})} className="win-input" />
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn btn-primary font-bold">GUARDAR PROVEEDOR</button>
+            </div>
+          </form>
         </div>
       )}
     </div>

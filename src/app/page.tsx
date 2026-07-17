@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '@/lib/firebase';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
-import { collection, onSnapshot, doc, collectionGroup, query, orderBy, limit, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, query, orderBy, limit, getDoc } from 'firebase/firestore';
 import { PosModule } from '@/components/pos/pos-module';
 import { DashboardModule } from '@/components/pos/dashboard-module';
 import { ProductsModule } from '@/components/pos/products-module';
@@ -117,8 +117,9 @@ export default function POSPage() {
       setReportsZ(snapshot.docs.map(doc => doc.data() as ReportZRecord));
     });
 
+    // Cambiado de collectionGroup a collection plana para evitar errores de índices complejos
     const unsubMovements = onSnapshot(
-      query(collectionGroup(db, 'logs'), orderBy('fecha', 'desc'), limit(200)), 
+      query(collection(db, 'inventory_movements'), orderBy('fecha', 'desc'), limit(200)), 
       (snapshot) => setMovements(snapshot.docs.map(doc => doc.data() as InventoryMovement)),
       (error) => console.error("Error logs:", error)
     );

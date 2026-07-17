@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { Product, InventoryMovement } from '@/types/pos';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 
 interface InventoryModuleProps {
   active: boolean;
@@ -18,12 +18,23 @@ export function InventoryModule({ active, onOpenModal, products, movements }: In
   const [selectedProductKardex, setSelectedProductKardex] = useState<string | null>(null);
   const [prodLogs, setProdLogs] = useState<InventoryMovement[]>([]);
 
-  // Efecto para cargar logs específicos de un producto (Sub-colección optimizada)
+  // Efecto para cargar logs específicos de un producto desde la colección global plana
   useEffect(() => {
     if (activeReport === 'kardex' && selectedProductKardex) {
-      const unsub = onSnapshot(query(collection(db, `products/${selectedProductKardex}/logs`), orderBy('fecha', 'desc')), (snapshot) => {
-        setProdLogs(snapshot.docs.map(doc => doc.data() as InventoryMovement));
-      });
+      // Usamos una consulta simple sin orderBy para evitar requerir índices compuestos inmediatos.
+      // El ordenamiento se hace en memoria (React-side) para asegurar funcionamiento inmediato.
+      const unsub = onSnapshot(
+        query(
+          collection(db, 'inventory_movements'), 
+          where('codigoProducto', '==', selectedProductKardex)
+        ), 
+        (snapshot) => {
+          const data = snapshot.docs.map(doc => doc.data() as InventoryMovement);
+          // Ordenar por fecha descendente en memoria
+          data.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+          setProdLogs(data);
+        }
+      );
       return () => unsub();
     }
   }, [activeReport, selectedProductKardex]);
@@ -68,6 +79,9 @@ export function InventoryModule({ active, onOpenModal, products, movements }: In
                   <td>${m.costo.toFixed(2)}</td>
                 </tr>
               ))}
+              {prodLogs.length === 0 && (
+                <tr><td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: '#888' }}>No hay movimientos registrados para este producto</td></tr>
+              )}
             </tbody>
           </table>
         </div>
