@@ -85,8 +85,7 @@ export default function POSPage() {
           setIsLoggedIn(true);
         }
       } else {
-        // No hay sesión de Firebase, pero no limpiamos isLoggedIn aquí 
-        // para permitir el bypass de emergencia controlado en handleLogin
+        // No hay sesión activa
       }
     });
     return () => unsubscribe();
@@ -124,9 +123,20 @@ export default function POSPage() {
       setReportsZ(snapshot.docs.map(doc => doc.data() as ReportZRecord));
     });
 
-    const unsubMovements = onSnapshot(query(collectionGroup(db, 'logs'), orderBy('fecha', 'desc'), limit(200)), (snapshot) => {
-      setMovements(snapshot.docs.map(doc => doc.data() as InventoryMovement));
-    });
+    const unsubMovements = onSnapshot(
+      query(collectionGroup(db, 'logs'), orderBy('fecha', 'desc'), limit(200)), 
+      (snapshot) => {
+        setMovements(snapshot.docs.map(doc => doc.data() as InventoryMovement));
+      },
+      (error) => {
+        // Capturamos el error de falta de índice para evitar crash de la app
+        if (error.code === 'failed-precondition') {
+          console.warn("Falta índice de grupo de colecciones para 'logs'. Por favor, usa el enlace en el mensaje de error de Firebase para crearlo.");
+        } else {
+          console.error("Error en snapshot listener de movimientos:", error);
+        }
+      }
+    );
 
     setIsLoaded(true);
     return () => {
