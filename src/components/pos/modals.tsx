@@ -13,7 +13,6 @@ import {
 import { db } from '@/lib/firebase';
 import { doc, setDoc, writeBatch, deleteDoc, updateDoc, increment } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, getAuth, signOut } from 'firebase/auth';
-import { initializeApp, getApp } from 'firebase/app';
 
 interface ModalsProps {
   activeModal: string | null;
@@ -64,30 +63,6 @@ export function Modals({
 
   const [kitSearch, setKitSearch] = useState('');
 
-  // Lógica de Recálculo Tridireccional
-  const handlePriceUpdate = (type: 'margin' | 'usd' | 'bs' | 'cost', value: number) => {
-    let newForm = { ...productForm };
-    const cost = type === 'cost' ? value : productForm.costoPromedio;
-    const tasa = config.tasa || 1;
-
-    if (type === 'cost') {
-      newForm.costoPromedio = value;
-      newForm.precio1 = value * (1 + (newForm.utilidadPorcentaje / 100));
-    } else if (type === 'margin') {
-      newForm.utilidadPorcentaje = value;
-      newForm.precio1 = cost * (1 + (value / 100));
-    } else if (type === 'usd') {
-      newForm.precio1 = value;
-      newForm.utilidadPorcentaje = cost > 0 ? ((value / cost) - 1) * 100 : 0;
-    } else if (type === 'bs') {
-      const usdValue = value / tasa;
-      newForm.precio1 = usdValue;
-      newForm.utilidadPorcentaje = cost > 0 ? ((usdValue / cost) - 1) * 100 : 0;
-    }
-
-    setProductForm(newForm);
-  };
-
   const [clientForm, setClientForm] = useState<Client | any>({
     tipoRif: 'V', rifNum: '', nombre: '', telefono: '', email: '', direccion: '', saldo: 0, tipo: 'Contribuyente'
   });
@@ -97,7 +72,7 @@ export function Modals({
   });
 
   const [entradaHeader, setEntradaHeader] = useState({
-    proveedor: '', nroFactura: '', tasaBcv: 36.5, tipoCompra: 'Mixto', diasCredito: 7, pagoContadoUsd: 0, pagoContadoBs: 0
+    proveedor: '', nroFactura: '', tasaBcv: config.tasa, tipoCompra: 'Mixto', diasCredito: 7, pagoContadoUsd: 0, pagoContadoBs: 0
   });
   const [entradaSearch, setEntradaSearch] = useState('');
   const [entradaCart, setEntradaCart] = useState<any[]>([]);
@@ -121,10 +96,51 @@ export function Modals({
     }
   }, [activeModal, editingId, products, clients, providers]);
 
+  // Lógica de Recálculo Tridireccional en Ficha Maestra
+  const handlePriceUpdate = (type: 'margin' | 'usd' | 'bs' | 'cost', value: number) => {
+    let newForm = { ...productForm };
+    const cost = type === 'cost' ? value : productForm.costoPromedio;
+    const tasa = config.tasa || 1;
+
+    if (type === 'cost') {
+      newForm.costoPromedio = value;
+      newForm.precio1 = value * (1 + (newForm.utilidadPorcentaje / 100));
+    } else if (type === 'margin') {
+      newForm.utilidadPorcentaje = value;
+      newForm.precio1 = cost * (1 + (value / 100));
+    } else if (type === 'usd') {
+      newForm.precio1 = value;
+      newForm.utilidadPorcentaje = cost > 0 ? ((value / cost) - 1) * 100 : 0;
+    } else if (type === 'bs') {
+      const usdValue = value / tasa;
+      newForm.precio1 = usdValue;
+      newForm.utilidadPorcentaje = cost > 0 ? ((usdValue / cost) - 1) * 100 : 0;
+    }
+
+    setProductForm(newForm);
+  };
+
+  // Lógica de Recálculo Recíproco en Entrada por Compra
+  const handleEntradaPayment = (type: 'usd' | 'bs', value: number) => {
+    const tasa = entradaHeader.tasaBcv || 1;
+    if (type === 'usd') {
+      setEntradaHeader({
+        ...entradaHeader,
+        pagoContadoUsd: value,
+        pagoContadoBs: Number((value * tasa).toFixed(2))
+      });
+    } else {
+      setEntradaHeader({
+        ...entradaHeader,
+        pagoContadoBs: value,
+        pagoContadoUsd: Number((value / tasa).toFixed(4))
+      });
+    }
+  };
+
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Si es Kit Virtual, forzamos stock a 0
       const finalProduct = { ...productForm };
       if (finalProduct.isKit && !finalProduct.stockPropio) {
         finalProduct.stock = 0;
@@ -161,6 +177,63 @@ export function Modals({
     setKitSearch('');
   };
 
+  const handleProcessEntrada = async () => {
+    if (!entradaHeader.proveedor || entradaCart.length === 0) {
+      notify('❌ Complete los datos del proveedor e items', 'warning');
+      return;
+    }
+
+    const batch = writeBatch(db);
+    const fecha = new Date().toISOString();
+
+    for (const item of entradaCart) {
+      const product = products.find(p => p.codigo === item.codigo);
+      if (product) {
+        const stockPrev = product.stock;
+        const newStock = stockPrev + item.cantidad;
+        const totalStock = newStock;
+        const newCostoPromedio = ((product.costoPromedio * stockPrev) + (item.costo * item.cantidad)) / totalStock;
+
+        batch.update(doc(db, 'products', product.codigo), {
+          stock: newStock,
+          costoPromedio: newCostoPromedio,
+          costoActual: item.costo
+        });
+
+        const logId = uuidv4();
+        batch.set(doc(db, `products/${product.codigo}/logs`, logId), {
+          id: logId, fecha, codigoProducto: product.codigo, tipo: 'ENTRADA',
+          cantidad: item.cantidad, stockPrevio: stockPrev, stockNuevo: newStock,
+          costo: item.costo, referencia: entradaHeader.nroFactura,
+          comentario: `Recepción de mercancía - Fact: ${entradaHeader.nroFactura}`,
+          usuario: config.vendedor
+        });
+      }
+    }
+
+    const totalFactUsd = entradaCart.reduce((s, it) => s + (it.costo * it.cantidad), 0);
+    const saldoPendiente = totalFactUsd - entradaHeader.pagoContadoUsd;
+
+    if (saldoPendiente > 0.0001) {
+      const accId = uuidv4();
+      batch.set(doc(db, 'accounts', accId), {
+        id: accId,
+        entidad: entradaHeader.proveedor,
+        montoTotal: totalFactUsd,
+        montoPagado: entradaHeader.pagoContadoUsd,
+        fechaEmision: fecha,
+        estado: 'Pendiente',
+        referencia: entradaHeader.nroFactura,
+        tipo: 'CXP'
+      });
+    }
+
+    await batch.commit();
+    notify('✅ Entrada procesada exitosamente');
+    setEntradaCart([]);
+    onClose();
+  };
+
   const finalizeSale = async () => {
     const totalUsd = cart.reduce((acc, item) => acc + (item.precioUsd * item.cantidad * (1 + item.iva / 100)), 0);
     const batch = writeBatch(db);
@@ -191,7 +264,6 @@ export function Modals({
     for (const item of cart) {
       const product = products[item.productIndex];
       
-      // Si es Kit VIRTUAL, descontamos componentes
       if (item.isKit && !item.stockPropio) {
         for (const comp of product.kitComponents) {
           const compProd = products.find(p => p.codigo === comp.codigo);
@@ -209,7 +281,6 @@ export function Modals({
           }
         }
       } else if (!product.isService) {
-        // Venta normal o Kit con Stock Propio
         const newStock = product.stock - item.cantidad;
         batch.update(doc(db, 'products', product.codigo), { stock: newStock });
         const logId = uuidv4();
@@ -228,6 +299,11 @@ export function Modals({
     onClose();
   };
 
+  const totalFacturaUsd = entradaCart.reduce((s, it) => s + (it.costo * it.cantidad), 0);
+  const equivBs = totalFacturaUsd * entradaHeader.tasaBcv;
+  const totalPagadoUsd = entradaHeader.pagoContadoUsd;
+  const totalPendienteUsd = totalFacturaUsd - totalPagadoUsd;
+
   if (!activeModal && !lastSale) return null;
 
   return (
@@ -242,7 +318,6 @@ export function Modals({
           <form onSubmit={handleSaveProduct}>
             <div className="modal-body overflow-y-auto" style={{ padding: '15px' }}>
               <div className="grid grid-cols-3 gap-6 mb-6">
-                {/* Columna 1: Identificación */}
                 <div className="win-window p-4" style={{ background: '#c0c0c0', border: '1px solid #808080' }}>
                    <div className="form-group mb-4">
                       <label className="font-bold">Código Interno:</label>
@@ -265,7 +340,6 @@ export function Modals({
                    </div>
                 </div>
 
-                {/* Columna 2: Categorización */}
                 <div className="win-window p-4" style={{ background: '#c0c0c0', border: '1px solid #808080' }}>
                    <div className="form-group mb-4">
                       <label className="font-bold">Marca:</label>
@@ -311,7 +385,6 @@ export function Modals({
                    </div>
                 </div>
 
-                {/* Columna 3: Finanzas (Tridireccional) */}
                 <div className="win-window p-4" style={{ background: '#c0c0c0', border: '1px solid #808080' }}>
                    <div className="form-group mb-4">
                       <label className="font-bold text-red-800">Costo Actual (USD):</label>
@@ -348,7 +421,6 @@ export function Modals({
                 </div>
               </div>
 
-              {/* Secciones Inferiores */}
               <div className="grid grid-cols-2 gap-6">
                  <div className="win-window p-6" style={{ background: '#c0c0c0', border: '1px solid #808080' }}>
                     <h4 className="text-blue-800 font-bold mb-4 uppercase text-xs">STOCK Y TIPO</h4>
@@ -393,7 +465,6 @@ export function Modals({
                  </div>
               </div>
 
-              {/* Sección de Kit Dinámica */}
               <div className="mt-6 flex flex-col gap-4">
                  <div className="flex items-center gap-4">
                     <label className="flex items-center gap-3 font-bold cursor-pointer">
@@ -481,7 +552,226 @@ export function Modals({
         </div>
       )}
 
-      {/* MODAL PROCESAR COBRO */}
+      {activeModal === 'modalEntrada' && (
+        <div className="modal-window xlarge" onClick={e => e.stopPropagation()} style={{ width: '950px', maxHeight: '90vh' }}>
+          <div className="win-titlebar">
+            <span className="flex items-center gap-2"><PlusCircle size={14}/> ENTRADA POR COMPRA (RECEPCIÓN)</span>
+            <span className="modal-close" onClick={onClose}></span>
+          </div>
+          <div className="modal-body flex flex-col gap-4 overflow-hidden">
+            <div className="win-window p-6" style={{ background: '#c0c0c0', border: '1px solid #808080' }}>
+              <div className="grid grid-cols-3 gap-6">
+                <div className="form-group">
+                  <label className="font-bold">Proveedor:</label>
+                  <input type="text" value={entradaHeader.proveedor} onChange={e => setEntradaHeader({...entradaHeader, proveedor: e.target.value})} className="win-input" />
+                </div>
+                <div className="form-group">
+                  <label className="font-bold">Nro Factura:</label>
+                  <input type="text" value={entradaHeader.nroFactura} onChange={e => setEntradaHeader({...entradaHeader, nroFactura: e.target.value})} className="win-input" />
+                </div>
+                <div className="form-group">
+                  <label className="font-bold">Tasa BCV:</label>
+                  <input 
+                    type="number" step="0.01" 
+                    value={entradaHeader.tasaBcv} 
+                    onChange={e => {
+                      const newTasa = parseFloat(e.target.value) || 0;
+                      setEntradaHeader({
+                        ...entradaHeader, 
+                        tasaBcv: newTasa,
+                        pagoContadoBs: Number((entradaHeader.pagoContadoUsd * newTasa).toFixed(2))
+                      });
+                    }} 
+                    className="win-input font-bold" 
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-4 gap-6 mt-4">
+                <div className="form-group">
+                  <label className="font-bold">Tipo Compra:</label>
+                  <select value={entradaHeader.tipoCompra} onChange={e => setEntradaHeader({...entradaHeader, tipoCompra: e.target.value})} className="win-input">
+                    <option value="Contado">Contado</option>
+                    <option value="Credito">Crédito</option>
+                    <option value="Mixto">Mixto</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="font-bold">Días Crédito:</label>
+                  <input type="number" value={entradaHeader.diasCredito} onChange={e => setEntradaHeader({...entradaHeader, diasCredito: parseInt(e.target.value) || 0})} className="win-input" />
+                </div>
+                <div className="form-group">
+                  <label className="font-bold">Pago Contado (USD):</label>
+                  <input 
+                    type="number" step="0.0001" 
+                    value={entradaHeader.pagoContadoUsd || ''} 
+                    onChange={e => handleEntradaPayment('usd', parseFloat(e.target.value) || 0)} 
+                    className="win-input font-bold" 
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="font-bold">Pago Contado (Bs.):</label>
+                  <input 
+                    type="number" step="0.01" 
+                    value={entradaHeader.pagoContadoBs || ''} 
+                    onChange={e => handleEntradaPayment('bs', parseFloat(e.target.value) || 0)} 
+                    className="win-input font-bold" 
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="toolbar bg-gray-200 p-2 border border-gray-400">
+               <button type="button" className="btn px-3 flex items-center gap-2"><Plus size={14}/> NUEVA FICHA</button>
+               <div className="relative flex-1 mx-2">
+                 <input 
+                    type="text" 
+                    placeholder="🔍 Buscar producto por código o nombre..." 
+                    className="win-input w-full bg-white"
+                    value={entradaSearch}
+                    onChange={e => setEntradaSearch(e.target.value)}
+                 />
+                 {entradaSearch && (
+                   <div className="search-dropdown active w-full">
+                     {products.filter(p => p.codigo.toLowerCase().includes(entradaSearch.toLowerCase()) || p.nombre.toLowerCase().includes(entradaSearch.toLowerCase())).map(p => (
+                       <div key={p.codigo} className="search-dropdown-item" onClick={() => {
+                          setEntradaCart([...entradaCart, { codigo: p.codigo, descripcion: p.nombre, cantidad: 1, costo: p.costoPromedio }]);
+                          setEntradaSearch('');
+                       }}>
+                         {p.codigo} - {p.nombre} (Costo: ${p.costoPromedio.toFixed(4)})
+                       </div>
+                     ))}
+                   </div>
+                 )}
+               </div>
+               <button type="button" className="btn px-3 flex items-center gap-2"><Plus size={14}/> AÑADIR ITEM</button>
+            </div>
+
+            <div className="table-responsive bg-white flex-1 overflow-y-auto border-2 border-gray-400">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Descripción</th>
+                      <th style={{ textAlign: 'center' }}>Cant</th>
+                      <th style={{ textAlign: 'right' }}>Costo USD</th>
+                      <th style={{ textAlign: 'right' }}>Subtotal</th>
+                      <th style={{ textAlign: 'center' }}>Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {entradaCart.map((it, idx) => (
+                      <tr key={idx}>
+                        <td className="font-bold">{it.codigo}</td>
+                        <td>{it.descripcion}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <input 
+                            type="number" value={it.cantidad} 
+                            onChange={e => setEntradaCart(entradaCart.map((item, i) => i === idx ? {...item, cantidad: parseInt(e.target.value) || 1} : item))}
+                            className="w-16 text-center border"
+                          />
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <input 
+                            type="number" step="0.0001" value={it.costo} 
+                            onChange={e => setEntradaCart(entradaCart.map((item, i) => i === idx ? {...item, costo: parseFloat(e.target.value) || 0} : item))}
+                            className="w-24 text-right border pr-1"
+                          />
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 'bold' }}>${(it.costo * it.cantidad).toFixed(4)}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <button type="button" onClick={() => setEntradaCart(entradaCart.filter((_, i) => i !== idx))} className="text-red-600">🗑️</button>
+                        </td>
+                      </tr>
+                    ))}
+                    {entradaCart.length === 0 && (
+                      <tr><td colSpan={6} style={{ textAlign: 'center', padding: '60px', color: '#999' }}>No hay items cargados en esta compra</td></tr>
+                    )}
+                  </tbody>
+                </table>
+            </div>
+
+            <div className="flex gap-8 p-4 bg-gray-300 border-2 border-gray-400">
+               <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-gray-600 uppercase">Total Factura USD</span>
+                  <span className="text-2xl font-black text-blue-900">${totalFacturaUsd.toFixed(4)}</span>
+               </div>
+               <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-gray-600 uppercase">Equiv. Bs.</span>
+                  <span className="text-2xl font-black text-gray-700">{equivBs.toLocaleString('es-VE', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+               </div>
+               <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-gray-600 uppercase">Total Pagado USD</span>
+                  <span className="text-2xl font-black text-green-700">${totalPagadoUsd.toFixed(4)}</span>
+               </div>
+               <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-gray-600 uppercase">Pendiente USD (Crédito)</span>
+                  <span className="text-2xl font-black text-red-700">${totalPendienteUsd.toFixed(4)}</span>
+               </div>
+            </div>
+          </div>
+          <div className="modal-footer" style={{ padding: '15px' }}>
+            <button type="button" className="btn px-10" onClick={onClose}>Cancelar</button>
+            <button type="button" className="btn btn-primary px-10 font-black flex items-center gap-2 shadow-lg" onClick={handleProcessEntrada}>
+              <FileText size={16}/> PROCESAR ENTRADA
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeModal === 'modalAjuste' && (
+        <div className="modal-window" style={{ width: '450px' }} onClick={e => e.stopPropagation()}>
+          <div className="win-titlebar">
+             <span className="flex items-center gap-2"><RefreshCcw size={14}/> AJUSTE MANUAL DE INVENTARIO</span>
+             <span className="modal-close" onClick={onClose}></span>
+          </div>
+          <div className="modal-body space-y-4">
+             <div className="form-group">
+                <label className="font-bold">Producto:</label>
+                <select className="win-input" value={inventoryForm.codigo} onChange={e => setInventoryForm({...inventoryForm, codigo: e.target.value})}>
+                   <option value="">-- Seleccionar --</option>
+                   {products.map(p => <option key={p.codigo} value={p.codigo}>{p.codigo} - {p.nombre}</option>)}
+                </select>
+             </div>
+             <div className="grid grid-cols-2 gap-4">
+                <div className="form-group">
+                   <label className="font-bold">Cantidad (+ / -):</label>
+                   <input type="number" className="win-input" value={inventoryForm.cantidad} onChange={e => setInventoryForm({...inventoryForm, cantidad: parseInt(e.target.value) || 0})} />
+                </div>
+                <div className="form-group">
+                   <label className="font-bold">Costo Ref. (USD):</label>
+                   <input type="number" step="0.01" className="win-input" value={inventoryForm.costo} onChange={e => setInventoryForm({...inventoryForm, costo: parseFloat(e.target.value) || 0})} />
+                </div>
+             </div>
+             <div className="form-group">
+                <label className="font-bold">Motivo / Justificación:</label>
+                <textarea className="win-input" style={{ height: '80px' }} value={inventoryForm.comentario} onChange={e => setInventoryForm({...inventoryForm, comentario: e.target.value})} />
+             </div>
+          </div>
+          <div className="modal-footer">
+             <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+             <button type="button" className="btn btn-primary font-bold" onClick={async () => {
+                if (!inventoryForm.codigo || inventoryForm.cantidad === 0) return notify('❌ Datos incompletos', 'error');
+                const product = products.find(p => p.codigo === inventoryForm.codigo);
+                if (product) {
+                  const stockPrev = product.stock;
+                  const newStock = stockPrev + inventoryForm.cantidad;
+                  await updateDoc(doc(db, 'products', product.codigo), { stock: newStock });
+                  
+                  const logId = uuidv4();
+                  await setDoc(doc(db, `products/${product.codigo}/logs`, logId), {
+                    id: logId, fecha: new Date().toISOString(), codigoProducto: product.codigo, tipo: 'AJUSTE',
+                    cantidad: inventoryForm.cantidad, stockPrevio: stockPrev, stockNuevo: newStock,
+                    costo: inventoryForm.costo || product.costoPromedio, referencia: 'AJUSTE-MANUAL',
+                    comentario: inventoryForm.comentario, usuario: config.vendedor
+                  });
+                  notify('✅ Ajuste realizado correctamente');
+                  onClose();
+                }
+             }}>APLICAR AJUSTE</button>
+          </div>
+        </div>
+      )}
+
       {activeModal === 'modalProcesar' && (
         <div className="modal-window" style={{ width: '420px' }} onClick={e => e.stopPropagation()}>
           <div className="win-titlebar">
@@ -550,7 +840,6 @@ export function Modals({
         </div>
       )}
 
-      {/* TICKET DE VENTA (LAST SALE) */}
       {lastSale && (
         <div className="modal-window" style={{ width: '300px', background: '#fff' }} onClick={e => e.stopPropagation()}>
           <div className="p-6 font-mono text-[10px] border-4 border-black text-black">
