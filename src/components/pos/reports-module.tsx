@@ -6,6 +6,7 @@ import { Sale, Product, Client, ReportZRecord } from '@/types/pos';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '@/lib/firebase';
 import { doc, setDoc, collection } from 'firebase/firestore';
+import { TrendingUp } from 'lucide-react';
 
 interface ReportsModuleProps {
   active: boolean;
