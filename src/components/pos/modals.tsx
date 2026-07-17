@@ -7,10 +7,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { 
   Wallet, Search, Trash2, Save, CreditCard, UserPlus, 
   Shield, Mail, Key, Package, UserCircle, Truck, 
-  RefreshCcw, AlertCircle, TrendingUp, DollarSign
+  RefreshCcw, AlertCircle, TrendingUp, DollarSign,
+  PlusCircle, MinusCircle, FileText, UserCheck
 } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { doc, setDoc, writeBatch, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, writeBatch, deleteDoc, updateDoc, increment } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, getAuth, signOut } from 'firebase/auth';
 import { initializeApp, getApp } from 'firebase/app';
 
@@ -60,11 +61,15 @@ export function Modals({
   });
 
   const [clientForm, setClientForm] = useState<Client | any>({
-    tipoRif: 'V', rifNum: '', nombre: '', telefono: '', email: '', direccion: '', saldo: 0
+    tipoRif: 'V', rifNum: '', nombre: '', telefono: '', email: '', direccion: '', saldo: 0, tipo: 'Contribuyente'
   });
 
   const [providerForm, setProviderForm] = useState<Provider | any>({
     id: '', rif: '', nombre: '', direccion: '', contacto: '', telefono: ''
+  });
+
+  const [inventoryForm, setInventoryForm] = useState({
+    codigo: '', cantidad: 0, costo: 0, referencia: '', comentario: ''
   });
 
   const [userForm, setUserForm] = useState({ name: '', email: '', role: 'Cajero', password: '' });
@@ -83,6 +88,8 @@ export function Modals({
     } else if (activeModal === 'modalProcesar') {
       setPaymentState({ method: 'Efectivo USD', amount: 0, payments: [], totalPaidUsd: 0 });
       setTimeout(() => methodRef.current?.focus(), 100);
+    } else if (activeModal === 'modalEntrada' || activeModal === 'modalAjuste') {
+      setInventoryForm({ codigo: '', cantidad: 0, costo: 0, referencia: '', comentario: '' });
     }
   }, [activeModal, editingId, products, clients, providers]);
 
@@ -106,6 +113,55 @@ export function Modals({
       onClose();
     } catch (error) {
       notify('❌ Error al guardar cliente', 'error');
+    }
+  };
+
+  const handleSaveProvider = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = providerForm.rif || uuidv4();
+    try {
+      await setDoc(doc(db, 'providers', id), { ...providerForm, id });
+      notify('✅ Proveedor guardado');
+      onClose();
+    } catch (error) {
+      notify('❌ Error al guardar proveedor', 'error');
+    }
+  };
+
+  const handleInventoryOperation = async (type: 'ENTRADA' | 'AJUSTE') => {
+    if (!inventoryForm.codigo || inventoryForm.cantidad <= 0) {
+      return notify('❌ Datos de inventario inválidos', 'error');
+    }
+
+    const product = products.find(p => p.codigo === inventoryForm.codigo);
+    if (!product) return notify('❌ Producto no encontrado', 'error');
+
+    try {
+      const batch = writeBatch(db);
+      const stockPrevio = product.stock;
+      const stockNuevo = stockPrevio + inventoryForm.cantidad;
+      const logId = uuidv4();
+
+      batch.update(doc(db, 'products', product.codigo), { stock: stockNuevo });
+      batch.set(doc(db, `products/${product.codigo}/logs`, logId), {
+        id: logId,
+        fecha: new Date().toISOString(),
+        codigoProducto: product.codigo,
+        tipo: type,
+        cantidad: inventoryForm.cantidad,
+        stockPrevio,
+        stockNuevo,
+        costo: inventoryForm.costo || product.costoPromedio,
+        referencia: inventoryForm.referencia || 'MANUAL',
+        comentario: inventoryForm.comentario,
+        usuario: config.vendedor
+      });
+
+      await batch.commit();
+      notify(`✅ ${type === 'ENTRADA' ? 'Recepción' : 'Ajuste'} procesado`);
+      onClose();
+    } catch (error) {
+      notify('❌ Error en operación de inventario', 'error');
     }
   };
 
@@ -356,6 +412,14 @@ export function Modals({
                 </div>
               </div>
               <div className="form-group">
+                <label>Tipo de Contribuyente:</label>
+                <select className="win-input" value={clientForm.tipo} onChange={e => setClientForm({...clientForm, tipo: e.target.value})}>
+                  <option value="Contribuyente">Contribuyente Ordinario</option>
+                  <option value="Especial">Sujeto Pasivo Especial</option>
+                  <option value="Exento">Exento / No Contribuyente</option>
+                </select>
+              </div>
+              <div className="form-group">
                 <label>Dirección Fiscal:</label>
                 <textarea value={clientForm.direccion} onChange={e => setClientForm({...clientForm, direccion: e.target.value})} className="win-input" rows={2} />
               </div>
@@ -365,6 +429,123 @@ export function Modals({
               <button type="submit" className="btn btn-primary font-bold">💾 GUARDAR CLIENTE</button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* MODAL PROVEEDOR */}
+      {activeModal === 'modalProveedor' && (
+        <div className="modal-window" style={{ width: '450px' }} onClick={e => e.stopPropagation()}>
+          <div className="modal-titlebar">
+            <span className="flex items-center gap-2"><Truck size={16}/> FICHA DE PROVEEDOR</span>
+            <span className="modal-close" onClick={onClose}>✕</span>
+          </div>
+          <form onSubmit={handleSaveProvider}>
+            <div className="modal-body space-y-4">
+              <div className="form-group">
+                <label>RIF / Identificación:</label>
+                <input type="text" required value={providerForm.rif} onChange={e => setProviderForm({...providerForm, rif: e.target.value.toUpperCase()})} className="win-input font-bold" />
+              </div>
+              <div className="form-group">
+                <label>Razón Social:</label>
+                <input type="text" required value={providerForm.nombre} onChange={e => setProviderForm({...providerForm, nombre: e.target.value})} className="win-input font-bold" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="form-group">
+                  <label>Persona Contacto:</label>
+                  <input type="text" value={providerForm.contacto} onChange={e => setProviderForm({...providerForm, contacto: e.target.value})} className="win-input" />
+                </div>
+                <div className="form-group">
+                  <label>Teléfono:</label>
+                  <input type="text" value={providerForm.telefono} onChange={e => setProviderForm({...providerForm, telefono: e.target.value})} className="win-input" />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Dirección:</label>
+                <textarea value={providerForm.direccion} onChange={e => setProviderForm({...providerForm, direccion: e.target.value})} className="win-input" rows={2} />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn btn-primary font-bold">💾 GUARDAR PROVEEDOR</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* MODAL RECEPCIÓN / AJUSTE INVENTARIO */}
+      {(activeModal === 'modalEntrada' || activeModal === 'modalAjuste') && (
+        <div className="modal-window" style={{ width: '400px' }} onClick={e => e.stopPropagation()}>
+          <div className="modal-titlebar">
+            <span className="flex items-center gap-2">
+              {activeModal === 'modalEntrada' ? <PlusCircle size={16}/> : <RefreshCcw size={16}/>} 
+              {activeModal === 'modalEntrada' ? 'RECEPCIÓN DE MERCANCÍA' : 'AJUSTE DE INVENTARIO'}
+            </span>
+            <span className="modal-close" onClick={onClose}>✕</span>
+          </div>
+          <div className="modal-body space-y-4">
+            <div className="form-group">
+              <label>Seleccionar Producto:</label>
+              <select 
+                className="win-input font-bold" 
+                value={inventoryForm.codigo} 
+                onChange={e => setInventoryForm({...inventoryForm, codigo: e.target.value})}
+              >
+                <option value="">-- Seleccionar --</option>
+                {products.filter(p => !p.isService).map(p => (
+                  <option key={p.codigo} value={p.codigo}>{p.codigo} - {p.nombre} (Stock: {p.stock})</option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="form-group">
+                <label>Cantidad:</label>
+                <input 
+                  type="number" 
+                  value={inventoryForm.cantidad || ''} 
+                  onChange={e => setInventoryForm({...inventoryForm, cantidad: parseFloat(e.target.value) || 0})} 
+                  className="win-input text-right font-bold"
+                />
+              </div>
+              <div className="form-group">
+                <label>Costo Actual:</label>
+                <input 
+                  type="number" 
+                  value={inventoryForm.costo || ''} 
+                  onChange={e => setInventoryForm({...inventoryForm, costo: parseFloat(e.target.value) || 0})} 
+                  className="win-input text-right"
+                  placeholder="Opcional"
+                />
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Referencia / Documento:</label>
+              <input 
+                type="text" 
+                value={inventoryForm.referencia} 
+                onChange={e => setInventoryForm({...inventoryForm, referencia: e.target.value})} 
+                className="win-input"
+                placeholder="N° Factura, Compra, etc."
+              />
+            </div>
+            <div className="form-group">
+              <label>Comentario:</label>
+              <textarea 
+                value={inventoryForm.comentario} 
+                onChange={e => setInventoryForm({...inventoryForm, comentario: e.target.value})} 
+                className="win-input" 
+                rows={2} 
+              />
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button className="btn" onClick={onClose}>Cancelar</button>
+            <button 
+              className={`btn font-bold ${activeModal === 'modalEntrada' ? 'btn-success' : 'btn-primary'}`}
+              onClick={() => handleInventoryOperation(activeModal === 'modalEntrada' ? 'ENTRADA' : 'AJUSTE')}
+            >
+              🚀 PROCESAR {activeModal === 'modalEntrada' ? 'ENTRADA' : 'AJUSTE'}
+            </button>
+          </div>
         </div>
       )}
 
