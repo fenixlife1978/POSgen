@@ -55,7 +55,7 @@ export function Modals({
   // Form states
   const [productForm, setProductForm] = useState<Product | any>({
     codigo: '', nombre: '', categoria: 'REPUESTOS', marca: 'GENERICO', 
-    costoPromedio: 0, utilidadPorcentaje: 30, precio1: 0, 
+    costoPromedio: 0, utilidadPorcentaje: 30, precio1: 0, precio2: 0, precio3: 0, precio4: 0,
     stock: 0, stockMin: 5, iva: 16, activo: true, isService: false
   });
 
@@ -84,7 +84,7 @@ export function Modals({
       setPaymentState({ method: 'Efectivo USD', amount: 0, payments: [], totalPaidUsd: 0 });
       setTimeout(() => methodRef.current?.focus(), 100);
     }
-  }, [activeModal, editingId]);
+  }, [activeModal, editingId, products, clients, providers]);
 
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -214,10 +214,6 @@ export function Modals({
                       <label>Código Interno:</label>
                       <input type="text" required value={productForm.codigo} onChange={e => setProductForm({...productForm, codigo: e.target.value.toUpperCase()})} className="win-input font-bold" disabled={editingId !== null} />
                     </div>
-                    <div className="form-group">
-                      <label>Código de Barras:</label>
-                      <input type="text" value={productForm.barcode || ''} onChange={e => setProductForm({...productForm, barcode: e.target.value})} className="win-input" />
-                    </div>
                   </div>
                   <div className="form-group">
                     <label>Tipo de Item:</label>
@@ -226,27 +222,25 @@ export function Modals({
                       <option value="true">🛠️ Servicio / Mano de Obra</option>
                     </select>
                   </div>
+                  <div className="form-group">
+                    <label>Marca:</label>
+                    <input type="text" value={productForm.marca} onChange={e => setProductForm({...productForm, marca: e.target.value})} className="win-input" />
+                  </div>
+                  <div className="form-group">
+                    <label>Categoría:</label>
+                    <select className="win-input" value={productForm.categoria} onChange={e => setProductForm({...productForm, categoria: e.target.value})}>
+                      <option value="REPUESTOS">REPUESTOS</option>
+                      <option value="LUBRICANTES">LUBRICANTES</option>
+                      <option value="ACCESORIOS">ACCESORIOS</option>
+                      <option value="SERVICIOS">SERVICIOS</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div className="col-span-2 space-y-4">
                   <div className="form-group">
                     <label>Nombre / Descripción del Artículo:</label>
                     <input type="text" required value={productForm.nombre} onChange={e => setProductForm({...productForm, nombre: e.target.value})} className="win-input font-bold" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="form-group">
-                      <label>Categoría:</label>
-                      <select className="win-input" value={productForm.categoria} onChange={e => setProductForm({...productForm, categoria: e.target.value})}>
-                        <option value="REPUESTOS">REPUESTOS</option>
-                        <option value="LUBRICANTES">LUBRICANTES</option>
-                        <option value="ACCESORIOS">ACCESORIOS</option>
-                        <option value="SERVICIOS">SERVICIOS</option>
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label>Marca:</label>
-                      <input type="text" value={productForm.marca} onChange={e => setProductForm({...productForm, marca: e.target.value})} className="win-input" />
-                    </div>
                   </div>
                   
                   <div className="settings-section">
@@ -267,12 +261,33 @@ export function Modals({
                         }} className="win-input" />
                       </div>
                       <div className="form-group">
-                        <label>Precio 1 (Venta):</label>
+                        <label>IVA %:</label>
+                        <input type="number" value={productForm.iva} onChange={e => setProductForm({...productForm, iva: parseFloat(e.target.value) || 0})} className="win-input" />
+                      </div>
+                      <div className="form-group">
+                        <label>Activo:</label>
+                        <select className="win-input" value={productForm.activo ? 'true' : 'false'} onChange={e => setProductForm({...productForm, activo: e.target.value === 'true'})}>
+                          <option value="true">SÍ</option>
+                          <option value="false">NO</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 gap-4 mt-2">
+                      <div className="form-group">
+                        <label>Precio 1:</label>
                         <input type="number" step="0.01" value={productForm.precio1} onChange={e => setProductForm({...productForm, precio1: parseFloat(e.target.value) || 0})} className="win-input font-bold text-blue-800" />
                       </div>
                       <div className="form-group">
-                        <label>IVA %:</label>
-                        <input type="number" value={productForm.iva} onChange={e => setProductForm({...productForm, iva: parseFloat(e.target.value) || 0})} className="win-input" />
+                        <label>Precio 2:</label>
+                        <input type="number" step="0.01" value={productForm.precio2} onChange={e => setProductForm({...productForm, precio2: parseFloat(e.target.value) || 0})} className="win-input" />
+                      </div>
+                      <div className="form-group">
+                        <label>Precio 3:</label>
+                        <input type="number" step="0.01" value={productForm.precio3} onChange={e => setProductForm({...productForm, precio3: parseFloat(e.target.value) || 0})} className="win-input" />
+                      </div>
+                      <div className="form-group">
+                        <label>Precio 4:</label>
+                        <input type="number" step="0.01" value={productForm.precio4} onChange={e => setProductForm({...productForm, precio4: parseFloat(e.target.value) || 0})} className="win-input" />
                       </div>
                     </div>
                   </div>
