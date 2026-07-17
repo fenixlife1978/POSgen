@@ -53,11 +53,11 @@ export function Modals({
   const amountRef = useRef<HTMLInputElement>(null);
 
   // Form states
-  const [productForm, setProductForm] = useState<Product | any>({
+  const [productForm, setProductForm] = useState<any>({
     codigo: '', nombre: '', categoria: 'Accesorio', marca: 'Toyota', 
     barcode: '', referencia: '', unidad: 'Unidad', departamento: 'Tienda',
-    costoPromedio: 0, utilidadPorcentaje: 20, precio1: 0, precio2: 0, precio3: 0, precio4: 0,
-    stock: 0, stockMin: 5, iva: 16, exento: false, activo: true, isService: false, isKit: false, stockPropio: true,
+    costoPromedio: '0', utilidadPorcentaje: '0', precio1: '0', precio2: '0', precio3: '0', precio4: '0',
+    stock: '0', stockMin: '5', iva: 16, exento: false, activo: true, isService: false, isKit: false, stockPropio: true,
     kitComponents: [], ubicacion: ''
   });
 
@@ -87,7 +87,26 @@ export function Modals({
 
   useEffect(() => {
     if (activeModal === 'modalProducto' && editingId !== null) {
-      setProductForm(products[editingId]);
+      const p = products[editingId];
+      setProductForm({
+        ...p,
+        costoPromedio: p.costoPromedio?.toString() || '0',
+        utilidadPorcentaje: p.utilidadPorcentaje?.toString() || '0',
+        precio1: p.precio1?.toString() || '0',
+        precio2: p.precio2?.toString() || '0',
+        precio3: p.precio3?.toString() || '0',
+        precio4: p.precio4?.toString() || '0',
+        stock: p.stock?.toString() || '0',
+        stockMin: p.stockMin?.toString() || '0'
+      });
+    } else if (activeModal === 'modalProducto' && editingId === null) {
+      setProductForm({
+        codigo: '', nombre: '', categoria: 'Accesorio', marca: 'Toyota', 
+        barcode: '', referencia: '', unidad: 'Unidad', departamento: 'Tienda',
+        costoPromedio: '0', utilidadPorcentaje: '0', precio1: '0', precio2: '0', precio3: '0', precio4: '0',
+        stock: '0', stockMin: '5', iva: 16, exento: false, activo: true, isService: false, isKit: false, stockPropio: true,
+        kitComponents: [], ubicacion: ''
+      });
     } else if (activeModal === 'modalCliente' && editingId !== null) {
       setClientForm(clients[editingId]);
     } else if (activeModal === 'modalProveedor' && editingId !== null) {
@@ -96,34 +115,47 @@ export function Modals({
     }
   }, [activeModal, editingId, products, clients, providers]);
 
-  // Lógica de Recálculo Tridireccional: MARGEN SOBRE VENTA
+  // Lógica de Recálculo Tridireccional: MARGEN SOBRE VENTA (Texto libre)
   // Formula: Precio = Costo / (1 - (Margen / 100))
-  const handlePriceUpdate = (type: 'margin' | 'usd' | 'bs' | 'cost' | 'iva' | 'exento', value: any) => {
+  const handlePriceUpdate = (type: 'margin' | 'usd' | 'bs' | 'cost' | 'iva' | 'exento', rawValue: any) => {
     let newForm = { ...productForm };
-    const cost = type === 'cost' ? value : productForm.costoPromedio;
+    const numValue = (type === 'iva' || type === 'exento') ? rawValue : parseFloat(rawValue);
+    const costNum = type === 'cost' ? numValue : parseFloat(newForm.costoPromedio);
     const tasa = config.tasa || 1;
 
+    // Persistimos el string exacto para permitir "0." o ""
+    if (type === 'cost') newForm.costoPromedio = rawValue;
+    if (type === 'margin') newForm.utilidadPorcentaje = rawValue;
+    if (type === 'usd') newForm.precio1 = rawValue;
+    if (type === 'bs') {
+      const usdVal = isNaN(numValue) ? 0 : numValue / tasa;
+      newForm.precio1 = usdVal.toString();
+    }
+
     if (type === 'exento') {
-      newForm.exento = value;
-      newForm.iva = value ? 0 : 16;
+      newForm.exento = rawValue;
+      newForm.iva = rawValue ? 0 : 16;
     } else if (type === 'iva') {
-      newForm.iva = value;
-      newForm.exento = value === 0;
-    } else if (type === 'cost') {
-      newForm.costoPromedio = value;
-      const margin = newForm.utilidadPorcentaje / 100;
-      newForm.precio1 = margin < 1 ? value / (1 - margin) : value;
-    } else if (type === 'margin') {
-      newForm.utilidadPorcentaje = value;
-      const margin = value / 100;
-      newForm.precio1 = margin < 1 ? cost / (1 - margin) : cost;
-    } else if (type === 'usd') {
-      newForm.precio1 = value;
-      newForm.utilidadPorcentaje = value > 0 ? (1 - (cost / value)) * 100 : 0;
-    } else if (type === 'bs') {
-      const usdValue = value / tasa;
-      newForm.precio1 = usdValue;
-      newForm.utilidadPorcentaje = usdValue > 0 ? (1 - (cost / usdValue)) * 100 : 0;
+      newForm.iva = rawValue;
+      newForm.exento = rawValue === 0;
+    } else if (!isNaN(numValue) || rawValue === "") {
+      const effectiveNum = isNaN(numValue) ? 0 : numValue;
+      const effectiveCost = isNaN(costNum) ? 0 : costNum;
+
+      if (type === 'cost') {
+        const marginNum = parseFloat(newForm.utilidadPorcentaje) / 100;
+        const p1 = marginNum < 1 ? effectiveNum / (1 - marginNum) : effectiveNum;
+        newForm.precio1 = p1.toFixed(4);
+      } else if (type === 'margin') {
+        const marginNum = effectiveNum / 100;
+        const p1 = marginNum < 1 ? effectiveCost / (1 - marginNum) : effectiveCost;
+        newForm.precio1 = p1.toFixed(4);
+      } else if (type === 'usd') {
+        newForm.utilidadPorcentaje = effectiveNum > 0 ? ((1 - (effectiveCost / effectiveNum)) * 100).toFixed(2) : "0";
+      } else if (type === 'bs') {
+        const usdVal = effectiveNum / tasa;
+        newForm.utilidadPorcentaje = usdVal > 0 ? ((1 - (effectiveCost / usdVal)) * 100).toFixed(2) : "0";
+      }
     }
 
     setProductForm(newForm);
@@ -168,7 +200,17 @@ export function Modals({
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const finalProduct = { ...productForm };
+      const finalProduct = { 
+        ...productForm,
+        costoPromedio: parseFloat(productForm.costoPromedio) || 0,
+        utilidadPorcentaje: parseFloat(productForm.utilidadPorcentaje) || 0,
+        precio1: parseFloat(productForm.precio1) || 0,
+        precio2: parseFloat(productForm.precio2) || 0,
+        precio3: parseFloat(productForm.precio3) || 0,
+        precio4: parseFloat(productForm.precio4) || 0,
+        stock: parseInt(productForm.stock) || 0,
+        stockMin: parseInt(productForm.stockMin) || 0,
+      };
       if (finalProduct.isKit && !finalProduct.stockPropio) {
         finalProduct.stock = 0;
       }
@@ -388,7 +430,6 @@ export function Modals({
                           <option value="Taller">Taller</option>
                         </select>
                         <button type="button" className="btn px-2"><Plus size={10}/></button>
-                        <button type="button" className="btn px-2"><Minus size={10}/></button>
                       </div>
                    </div>
                 </div>
@@ -397,32 +438,32 @@ export function Modals({
                    <div className="form-group mb-4">
                       <label className="font-bold text-red-800">Costo Actual (USD):</label>
                       <input 
-                        type="number" step="0.01" value={productForm.costoPromedio} 
-                        onChange={e => handlePriceUpdate('cost', parseFloat(e.target.value) || 0)} 
+                        type="text" value={productForm.costoPromedio} 
+                        onChange={e => handlePriceUpdate('cost', e.target.value)} 
                         className="win-input font-bold" style={{ backgroundColor: '#ffcccc' }}
                       />
                    </div>
                    <div className="form-group mb-4">
-                      <label className="font-bold">Margen sobre Venta (%):</label>
+                      <label className="font-bold">Ganancia Markup (%):</label>
                       <input 
-                        type="number" value={productForm.utilidadPorcentaje} 
-                        onChange={e => handlePriceUpdate('margin', parseFloat(e.target.value) || 0)} 
+                        type="text" value={productForm.utilidadPorcentaje} 
+                        onChange={e => handlePriceUpdate('margin', e.target.value)} 
                         className="win-input text-blue-800 font-bold" 
                       />
                    </div>
                    <div className="form-group mb-4">
                       <label className="font-bold">Precio Detal (USD):</label>
                       <input 
-                        type="number" step="0.01" value={productForm.precio1} 
-                        onChange={e => handlePriceUpdate('usd', parseFloat(e.target.value) || 0)} 
+                        type="text" value={productForm.precio1} 
+                        onChange={e => handlePriceUpdate('usd', e.target.value)} 
                         className="win-input font-bold" style={{ backgroundColor: '#ffffcc' }}
                       />
                    </div>
                    <div className="form-group">
                       <label className="font-bold">Precio Detal (Bs.):</label>
                       <input 
-                        type="number" step="0.01" value={(productForm.precio1 * config.tasa).toFixed(2)} 
-                        onChange={e => handlePriceUpdate('bs', parseFloat(e.target.value) || 0)} 
+                        type="text" value={(parseFloat(productForm.precio1) * config.tasa).toFixed(2)} 
+                        onChange={e => handlePriceUpdate('bs', e.target.value)} 
                         className="win-input font-bold" style={{ backgroundColor: '#ffffcc' }}
                       />
                    </div>
@@ -431,18 +472,18 @@ export function Modals({
 
               <div className="grid grid-cols-2 gap-6">
                  <div className="win-window p-6" style={{ background: '#c0c0c0', border: '1px solid #808080' }}>
-                    <h4 className="text-blue-800 font-bold mb-4 uppercase text-xs">STOCK E IMPUESTOS</h4>
+                    <h4 className="text-blue-800 font-bold mb-4 uppercase text-xs">STOCK Y TIPO</h4>
                     <div className="grid grid-cols-2 gap-4">
                        <div className="form-group">
                           <label className="font-bold">Stock Mínimo:</label>
-                          <input type="number" value={productForm.stockMin} onChange={e => setProductForm({...productForm, stockMin: parseInt(e.target.value) || 0})} className="win-input" />
+                          <input type="text" value={productForm.stockMin} onChange={e => setProductForm({...productForm, stockMin: e.target.value})} className="win-input" />
                        </div>
                        <div className="form-group">
                           <label className="font-bold">Stock Inicial:</label>
                           <input 
-                            type="number" value={productForm.stock} 
+                            type="text" value={productForm.stock} 
                             disabled={editingId !== null || (productForm.isKit && !productForm.stockPropio)}
-                            onChange={e => setProductForm({...productForm, stock: parseInt(e.target.value) || 0})} 
+                            onChange={e => setProductForm({...productForm, stock: e.target.value})} 
                             className={`win-input ${ (editingId !== null || (productForm.isKit && !productForm.stockPropio)) ? 'bg-gray-200' : ''}`}
                             style={{ backgroundColor: (editingId !== null || (productForm.isKit && !productForm.stockPropio)) ? '' : '#ffffcc' }}
                           />
@@ -450,7 +491,7 @@ export function Modals({
                     </div>
                     <div className="grid grid-cols-2 gap-4 mt-4">
                        <div className="form-group">
-                          <label className="font-bold">Lector IVA (%):</label>
+                          <label className="font-bold">IVA (%):</label>
                           <select className="win-input font-bold" value={productForm.iva} onChange={e => handlePriceUpdate('iva', parseInt(e.target.value) || 0)}>
                             <option value={16}>16% (General)</option>
                             <option value={8}>8% (Reducido)</option>
@@ -475,16 +516,16 @@ export function Modals({
                     <div className="grid grid-cols-2 gap-4">
                        <div className="form-group">
                           <label className="font-bold text-[10px]">PRECIO MAYOR:</label>
-                          <input type="number" step="0.01" value={productForm.precio2} onChange={e => setProductForm({...productForm, precio2: parseFloat(e.target.value) || 0})} className="win-input" />
+                          <input type="text" value={productForm.precio2} onChange={e => setProductForm({...productForm, precio2: e.target.value})} className="win-input" />
                        </div>
                        <div className="form-group">
                           <label className="font-bold text-[10px]">PRECIO PROMOCIÓN:</label>
-                          <input type="number" step="0.01" value={productForm.precio3} onChange={e => setProductForm({...productForm, precio3: parseFloat(e.target.value) || 0})} className="win-input" />
+                          <input type="text" value={productForm.precio3} onChange={e => setProductForm({...productForm, precio3: e.target.value})} className="win-input" />
                        </div>
                     </div>
                     <div className="form-group mt-4">
                        <label className="font-bold text-[10px] text-red-600">PRECIO DE COSTO (REFERENCIAL):</label>
-                       <input type="number" step="0.01" value={productForm.precio4} onChange={e => setProductForm({...productForm, precio4: parseFloat(e.target.value) || 0})} className="win-input" />
+                       <input type="text" value={productForm.precio4} onChange={e => setProductForm({...productForm, precio4: e.target.value})} className="win-input" />
                     </div>
                  </div>
               </div>
@@ -501,7 +542,7 @@ export function Modals({
                              <input type="radio" checked={productForm.stockPropio} onChange={() => setProductForm({...productForm, stockPropio: true})} /> Stock Propio
                           </label>
                           <label className="flex items-center gap-2 text-xs font-bold">
-                             <input type="radio" checked={!productForm.stockPropio} onChange={() => setProductForm({...productForm, stockPropio: false, stock: 0})} /> Virtual (Deduce Componentes)
+                             <input type="radio" checked={!productForm.stockPropio} onChange={() => setProductForm({...productForm, stockPropio: false, stock: '0'})} /> Virtual (Deduce Componentes)
                           </label>
                        </div>
                     )}
