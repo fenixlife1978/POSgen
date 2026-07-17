@@ -31,12 +31,14 @@ export interface Product {
   capacidadContenido?: number;
   manejaPeso: boolean;
   isKit: boolean;
-  stockPropio: boolean; // Si es false y isKit es true, es Kit Virtual
+  stockPropio: boolean;
   kitComponents: KitComponent[];
   isService?: boolean;
+  serviceType?: string;
   stock: number;
   stockMin: number;
   iva: number;
+  exento: boolean;
 }
 
 export interface KitComponent {
@@ -101,6 +103,7 @@ export interface Sale {
 export interface Account {
   id: string;
   entidad: string;
+  rif: string;
   montoTotal: number;
   montoPagado: number;
   fechaEmision: string;
@@ -112,7 +115,7 @@ export interface Account {
 export interface User {
   id: string;
   username: string;
-  password: string;
+  password?: string;
   name: string;
   email?: string;
   role: 'Administrador' | 'Supervisor' | 'Cajero';
@@ -132,6 +135,18 @@ export interface InventoryMovement {
   costo: number;
   referencia: string;
   comentario: string;
+  usuario: string;
+}
+
+export interface CashMovement {
+  id: string;
+  fecha: string;
+  tipo: 'INGRESO' | 'EGRESO';
+  montoUsd: number;
+  montoBs: number;
+  metodo: string;
+  referencia: string;
+  concepto: string;
   usuario: string;
 }
 

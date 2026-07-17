@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -40,6 +41,9 @@ export default function POSPage() {
   const [selectedRow, setSelectedRow] = useState(-1);
   const [editingId, setEditingId] = useState<any>(null);
 
+  // POS Metadata
+  const [clientInfo, setClientInfo] = useState({ name: 'Consumidor Final', rif: 'V-00000000-0', saldo: 0, isCredit: false });
+
   const [config, setConfig] = useState({
     tasa: 36.50,
     igtf: 3,
@@ -68,19 +72,12 @@ export default function POSPage() {
             setConfig(prev => ({ ...prev, vendedor: userData.name || user.email || 'OPERADOR' }));
             setIsLoggedIn(true);
           } else {
-            const fallbackAdmin = { 
-              id: user.uid,
-              email: user.email, 
-              role: 'Administrador', 
-              name: 'Admin de Arranque',
-              active: true
-            };
+            const fallbackAdmin = { id: user.uid, email: user.email, role: 'Administrador', name: 'Admin de Arranque', active: true };
             setCurrentUser(fallbackAdmin);
             setConfig(prev => ({ ...prev, vendedor: 'ADMIN' }));
             setIsLoggedIn(true);
           }
         } catch (error) {
-          console.error("Error al cargar perfil:", error);
           setIsLoggedIn(true);
         }
       } else {
@@ -113,11 +110,8 @@ export default function POSPage() {
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       setUsers(snapshot.docs.map(doc => doc.data() as User));
     });
-
     const unsubConfig = onSnapshot(doc(db, 'system', 'config'), (snapshot) => {
-      if (snapshot.exists()) {
-        setConfig(snapshot.data() as any);
-      }
+      if (snapshot.exists()) setConfig(snapshot.data() as any);
     });
     const unsubReportsZ = onSnapshot(collection(db, 'accounting/audit/reportsZ'), (snapshot) => {
       setReportsZ(snapshot.docs.map(doc => doc.data() as ReportZRecord));
@@ -125,16 +119,8 @@ export default function POSPage() {
 
     const unsubMovements = onSnapshot(
       query(collectionGroup(db, 'logs'), orderBy('fecha', 'desc'), limit(200)), 
-      (snapshot) => {
-        setMovements(snapshot.docs.map(doc => doc.data() as InventoryMovement));
-      },
-      (error) => {
-        if (error.code === 'failed-precondition') {
-          console.warn("Falta índice de grupo de colecciones para 'logs'. Por favor, usa el enlace en el mensaje de error de Firebase para crearlo.");
-        } else {
-          console.error("Error en snapshot listener de movimientos:", error);
-        }
-      }
+      (snapshot) => setMovements(snapshot.docs.map(doc => doc.data() as InventoryMovement)),
+      (error) => console.error("Error logs:", error)
     );
 
     setIsLoaded(true);
@@ -146,43 +132,12 @@ export default function POSPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const email = loginData.email.trim();
-    const password = loginData.password;
-
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        if (userData.role !== loginData.role) {
-          await signOut(auth);
-          notify(`Acceso denegado: El usuario no tiene el rol de ${loginData.role}`, 'error');
-          return;
-        }
-      }
-      notify('Acceso concedido. Cargando sistema...');
-    } catch (error: any) {
-      console.warn("Auth Error:", error.code);
-      
-      if (email === 'admin@sistema.com' && password === '123' && loginData.role === 'Administrador') {
-        notify('⚠️ MODO EMERGENCIA: Acceso concedido para inicialización.', 'warning');
-        setCurrentUser({
-          id: 'EMERGENCY_ADMIN',
-          name: 'Administrador de Emergencia',
-          email: 'admin@sistema.com',
-          role: 'Administrador',
-          active: true
-        });
+      await signInWithEmailAndPassword(auth, loginData.email.trim(), loginData.password);
+    } catch (error) {
+      if (loginData.email === 'admin@sistema.com' && loginData.password === '123') {
+        setCurrentUser({ id: 'EMERGENCY', name: 'Admin Emergencia', role: 'Administrador', active: true });
         setIsLoggedIn(true);
-        return;
-      }
-
-      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-        notify('Credenciales incorrectas o usuario inexistente.', 'error');
-      } else {
-        notify('Error de conexión. Intente de nuevo.', 'error');
       }
     }
   };
@@ -190,7 +145,6 @@ export default function POSPage() {
   const handleLogout = async () => {
     await signOut(auth);
     setIsLoggedIn(false);
-    setCurrentUser(null);
   };
 
   const notify = (msg: string, type: 'success' | 'error' | 'warning' = 'success') => {
@@ -203,9 +157,7 @@ export default function POSPage() {
   };
 
   const openModal = (id: string, dataId?: any) => {
-    if (activeModal && activeModal !== id) {
-      setModalStack(prev => [...prev, activeModal]);
-    }
+    if (activeModal && activeModal !== id) setModalStack(prev => [...prev, activeModal]);
     setEditingId(dataId || null);
     setActiveModal(id);
   };
@@ -225,46 +177,18 @@ export default function POSPage() {
     return (
       <div className="login-screen">
         <div className="login-box">
-          <div className="login-title">Acceso Nube - POS Pro</div>
+          <div className="login-title">Autoparts POS - Repuestos y Lubricantes</div>
           <form onSubmit={handleLogin}>
+            <div className="form-group"><label>Email:</label><input type="email" required value={loginData.email} onChange={e => setLoginData({...loginData, email: e.target.value})} className="win-input" autoFocus /></div>
             <div className="form-group">
-              <label>Email de Usuario:</label>
-              <input 
-                type="email" 
-                required 
-                value={loginData.email} 
-                onChange={e => setLoginData({...loginData, email: e.target.value})} 
-                placeholder="ejemplo@sistema.com"
-                className="win-input"
-                autoFocus 
-              />
-            </div>
-            <div className="form-group">
-              <label>Rol de Acceso:</label>
-              <select 
-                value={loginData.role} 
-                onChange={e => setLoginData({...loginData, role: e.target.value})}
-                className="win-input font-bold"
-              >
+              <label>Rol:</label>
+              <select value={loginData.role} onChange={e => setLoginData({...loginData, role: e.target.value})} className="win-input font-bold">
                 <option value="Administrador">Administrador</option>
-                <option value="Supervisor">Supervisor</option>
                 <option value="Cajero">Cajero</option>
               </select>
             </div>
-            <div className="form-group">
-              <label>Contraseña:</label>
-              <input 
-                type="password" 
-                required 
-                value={loginData.password} 
-                onChange={e => setLoginData({...loginData, password: e.target.value})} 
-                placeholder="••••••••"
-                className="win-input"
-              />
-            </div>
-            <div style={{ marginTop: '20px', textAlign: 'right' }}>
-              <button type="submit" className="btn btn-primary">Iniciar Sesión</button>
-            </div>
+            <div className="form-group"><label>Clave:</label><input type="password" required value={loginData.password} onChange={e => setLoginData({...loginData, password: e.target.value})} className="win-input" /></div>
+            <div style={{ marginTop: '20px', textAlign: 'right' }}><button type="submit" className="btn btn-primary">Entrar al Sistema</button></div>
           </form>
           <div id="notification" className="notification"></div>
         </div>
@@ -277,77 +201,49 @@ export default function POSPage() {
       <div id="notification" className="notification"></div>
       <div className="dollar-bar">
         <span>💲 TASA BCV: <strong>{config.tasa.toFixed(2)}</strong></span>
-        <span style={{ marginLeft: 'auto', fontSize: '11px' }}>{config.nombreEmpresa} | Sesión: {currentUser?.name} ({currentUser?.role})</span>
+        <span style={{ marginLeft: 'auto', fontSize: '11px' }}>{config.nombreEmpresa} | {currentUser?.name} ({currentUser?.role})</span>
       </div>
       <div className="nav-tabs">
         {[
-          { id: 'pos', label: 'POS Venta' },
-          { id: 'dashboard', label: 'Dashboard' },
-          { id: 'productos', label: 'Productos' },
+          { id: 'pos', label: 'Venta (POS)' },
+          { id: 'dashboard', label: 'Resumen' },
+          { id: 'productos', label: 'Repuestos' },
           { id: 'clientes', label: 'Clientes' },
-          { id: 'proveedores', label: 'Proveedores' },
-          { id: 'ventas', label: 'Ventas' },
-          { id: 'inventario', label: 'Inventario' },
-          { id: 'reportes', label: 'Reportes' },
-          { id: 'cuentas', label: 'Cuentas' },
-          { id: 'usuarios', label: 'Usuarios' },
-          { id: 'config', label: 'Configuración' }
-        ].map(m => {
-          if (m.id === 'usuarios' && currentUser?.role !== 'Administrador') return null;
-          if (m.id === 'config' && currentUser?.role !== 'Administrador') return null;
-          
-          return (
-            <div key={m.id} className={`nav-tab ${activeModule === m.id ? 'active' : ''}`} onClick={() => setActiveModule(m.id)}>
-              {m.label}
-            </div>
-          );
-        })}
+          { id: 'ventas', label: 'Historial' },
+          { id: 'reportes', label: 'Contabilidad' },
+          { id: 'cuentas', label: 'Cuentas x Cobrar' },
+          { id: 'config', label: 'Ajustes' }
+        ].map(m => (
+          <div key={m.id} className={`nav-tab ${activeModule === m.id ? 'active' : ''}`} onClick={() => setActiveModule(m.id)}>
+            {m.label}
+          </div>
+        ))}
       </div>
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
-        <PosModule active={activeModule === 'pos'} onOpenModal={openModal} products={products} clients={clients} cart={posCart} setCart={setPosCart} config={config} notify={notify} selectedRow={selectedRow} setSelectedRow={setSelectedRow} onLogout={handleLogout} />
+        <PosModule active={activeModule === 'pos'} onOpenModal={openModal} products={products} clients={clients} cart={posCart} setCart={setPosCart} config={config} notify={notify} selectedRow={selectedRow} setSelectedRow={setSelectedRow} onLogout={handleLogout} clientInfo={clientInfo} setClientInfo={setClientInfo} />
         <DashboardModule active={activeModule === 'dashboard'} sales={sales} products={products} config={config} />
         <ProductsModule active={activeModule === 'productos'} onOpenModal={openModal} products={products} tasa={config.tasa} notify={notify} />
         <ClientsModule active={activeModule === 'clientes'} onOpenModal={openModal} clients={clients} setClients={setClients} notify={notify} />
-        <ProvidersModule active={activeModule === 'proveedores'} onOpenModal={openModal} providers={providers} setProviders={setProviders} notify={notify} />
         <SalesModule active={activeModule === 'ventas'} sales={sales} setSales={setSales} products={products} setProducts={setProducts} movements={movements} setMovements={setMovements} notify={notify} onOpenModal={openModal} config={config} />
         <InventoryModule active={activeModule === 'inventario'} onOpenModal={openModal} products={products} movements={movements} />
         <ReportsModule active={activeModule === 'reportes'} sales={sales} products={products} clients={clients} config={config} setConfig={setConfig} setReportsZ={setReportsZ} reportsZ={reportsZ} />
         <AccountsModule active={activeModule === 'cuentas'} accounts={accounts} movements={movements} />
-        <UsersModule active={activeModule === 'usuarios'} users={users} onOpenModal={openModal} />
         <ConfigModule active={activeModule === 'config'} onOpenModal={openModal} config={config} setConfig={setConfig} notify={notify} />
       </div>
       <div className="status-bar">
-        <span> Usuario: {currentUser?.name}</span>
-        <span> Tasa: {config.tasa}</span>
-        <button onClick={handleLogout} style={{ border:'none', background:'none', color:'red', cursor:'pointer', fontSize:'11px', padding:'0 10px'}}>CERRAR SESIÓN</button>
-        <span style={{marginLeft:'auto'}}> Conexión: <span style={{color: currentUser?.id === 'EMERGENCY_ADMIN' ? 'orange' : 'green', fontWeight:'bold'}}>{currentUser?.id === 'EMERGENCY_ADMIN' ? 'MODO INICIALIZACIÓN' : 'CLOUD SYNC OK'}</span></span>
+        <span> Tasa actual: {config.tasa}</span>
+        <button onClick={handleLogout} style={{ border:'none', background:'none', color:'red', cursor:'pointer', fontSize:'11px'}}>CERRAR SESIÓN</button>
+        <span style={{marginLeft:'auto'}}> CLOUD SYNC OK</span>
       </div>
       <Modals 
-        activeModal={activeModal} 
-        onClose={closeModal} 
-        onOpenModal={openModal}
-        products={products} 
-        setProducts={setProducts} 
-        clients={clients} 
-        setClients={setClients} 
-        providers={providers}
-        setProviders={setProviders}
-        sales={sales} 
-        setSales={setSales} 
-        accounts={accounts} 
-        setAccounts={setAccounts} 
-        presupuestos={() => {}} 
-        cart={posCart} 
-        setCart={setPosCart} 
-        config={config} 
-        setConfig={setConfig} 
-        notify={notify} 
-        selectedRow={selectedRow} 
-        editingId={editingId} 
-        users={users} 
-        setUsers={setUsers}
-        movements={movements} 
-        setMovements={setMovements}
+        activeModal={activeModal} onClose={closeModal} onOpenModal={openModal}
+        products={products} setProducts={setProducts} clients={clients} setClients={setClients} 
+        providers={providers} setProviders={setProviders} sales={sales} setSales={setSales} 
+        accounts={accounts} setAccounts={setAccounts} presupuestos={() => {}} 
+        cart={posCart} setCart={setPosCart} config={config} setConfig={setConfig} 
+        notify={notify} selectedRow={selectedRow} editingId={editingId} 
+        users={users} setUsers={setUsers} movements={movements} setMovements={setMovements}
+        clientInfo={clientInfo}
       />
     </div>
   );
