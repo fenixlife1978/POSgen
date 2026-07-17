@@ -10,9 +10,9 @@ import {
   RefreshCcw, AlertCircle, TrendingUp, DollarSign,
   PlusCircle, MinusCircle, FileText, UserCheck, Plus, Minus, Layers
 } from 'lucide-react';
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
 import { doc, setDoc, writeBatch, deleteDoc, updateDoc, increment } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, getAuth, signOut } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 
 interface ModalsProps {
   activeModal: string | null;
@@ -118,6 +118,31 @@ export function Modals({
     }
 
     setProductForm(newForm);
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      // 1. Crear en Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, userForm.email, userForm.password);
+      const newUser = userCredential.user;
+
+      // 2. Guardar perfil en Firestore
+      await setDoc(doc(db, 'users', newUser.uid), {
+        id: newUser.uid,
+        name: userForm.name,
+        email: userForm.email,
+        role: userForm.role,
+        active: true
+      });
+
+      notify('✅ Usuario creado exitosamente en Auth y Firestore');
+      setUserForm({ name: '', email: '', role: 'Cajero', password: '' });
+      onClose();
+    } catch (error: any) {
+      console.error("Error creating user:", error);
+      notify(`❌ Error: ${error.message}`, 'error');
+    }
   };
 
   // Lógica de Recálculo Recíproco en Entrada por Compra
@@ -547,6 +572,62 @@ export function Modals({
               <button type="submit" className="btn btn-primary px-8 font-bold flex items-center gap-2">
                 <Save size={14}/> GUARDAR FICHA MAESTRA
               </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {activeModal === 'modalNuevoUsuario' && (
+        <div className="modal-window" style={{ width: '400px' }} onClick={e => e.stopPropagation()}>
+          <div className="win-titlebar">
+            <span className="flex items-center gap-2"><UserPlus size={14}/> REGISTRO DE NUEVO USUARIO</span>
+            <span className="modal-close" onClick={onClose}></span>
+          </div>
+          <form onSubmit={handleCreateUser}>
+            <div className="modal-body space-y-4">
+              <div className="form-group">
+                <label className="font-bold">Nombre Completo:</label>
+                <input 
+                  type="text" required value={userForm.name} 
+                  onChange={e => setUserForm({...userForm, name: e.target.value})} 
+                  className="win-input" placeholder="Ej: Juan Pérez"
+                />
+              </div>
+              <div className="form-group">
+                <label className="font-bold">Correo Electrónico (Email):</label>
+                <input 
+                  type="email" required value={userForm.email} 
+                  onChange={e => setUserForm({...userForm, email: e.target.value})} 
+                  className="win-input" placeholder="usuario@sistema.com"
+                />
+              </div>
+              <div className="form-group">
+                <label className="font-bold">Rol / Nivel de Acceso:</label>
+                <select 
+                  value={userForm.role} 
+                  onChange={e => setUserForm({...userForm, role: e.target.value})} 
+                  className="win-input font-bold"
+                >
+                  <option value="Administrador">Administrador</option>
+                  <option value="Supervisor">Supervisor</option>
+                  <option value="Cajero">Cajero</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="font-bold">Clave Asignada:</label>
+                <input 
+                  type="password" required value={userForm.password} 
+                  onChange={e => setUserForm({...userForm, password: e.target.value})} 
+                  className="win-input" placeholder="Min. 6 caracteres"
+                />
+              </div>
+              <div className="bg-blue-50 p-2 border border-blue-200 text-[10px] text-blue-700">
+                ℹ️ Al crear el usuario, este quedará registrado inmediatamente en Firebase Auth y Firestore.
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+              <button type="submit" className="btn btn-primary font-bold">CREAR USUARIO</button>
             </div>
           </form>
         </div>
